@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Curriculum Versions{% endblock %}
+{% block page_title %}Curriculum Versions{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h5 class="mb-0 fw-semibold">All Curriculum Versions</h5>
+    <div class="text-muted small">
+      {% if profile.is_admin %}All departments{% else %}{{ profile.department.name }}{% endif %}
+    </div>
+  </div>
+  {% if profile.is_hod or profile.is_admin %}
+  <a href="{% url 'curriculum:version_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-1"></i>New Version
+  </a>
+  {% endif %}
+</div>
+
+{% if profile.is_admin %}
+  <!-- Group by department for admin -->
+  {% regroup versions by department as dept_versions %}
+  {% for dept_group in dept_versions %}
+  <div class="card table-card mb-4">
+    <div class="card-header">
+      <i class="bi bi-building me-2"></i>
+      <strong>{{ dept_group.grouper.name }}</strong>
+      <span class="badge bg-secondary ms-2">{{ dept_group.grouper.code }}</span>
+    </div>
+    <div class="card-body p-0">
+      {% include "curriculum/_version_table.html" with versions=dept_group.list %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="card"><div class="card-body text-center text-muted py-5">No curriculum versions found.</div></div>
+  {% endfor %}
+
+{% else %}
+  <div class="card table-card">
+    <div class="card-body p-0">
+      {% include "curriculum/_version_table.html" with versions=versions %}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

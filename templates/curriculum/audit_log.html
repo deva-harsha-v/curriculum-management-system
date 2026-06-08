@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Audit Log – {{ version }}{% endblock %}
+{% block page_title %}Audit Log — {{ version.regulation }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-semibold mb-0">Audit Log</h5>
+    <div class="text-muted small">{{ version.department.name }} · {{ version.regulation }} · Complete change history</div>
+  </div>
+  <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Version
+  </a>
+</div>
+
+<div class="card table-card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:0.85rem;">
+        <thead>
+          <tr>
+            <th style="width:150px">Timestamp</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Model</th>
+            <th>Record</th>
+            <th>Description</th>
+            {% if profile.is_hod %}<th>Rollback</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="text-muted">{{ log.timestamp|date:"d M Y H:i" }}</td>
+            <td>
+              <span class="fw-semibold">{{ log.user.get_full_name|default:log.user.username|default:"System" }}</span>
+            </td>
+            <td>
+              <span class="badge
+                {% if log.action == 'APPROVE' %}bg-success
+                {% elif log.action == 'REJECT' %}bg-danger
+                {% elif log.action == 'ROLLBACK' %}bg-warning text-dark
+                {% elif log.action == 'GENERATE_PDF' %}bg-info text-dark
+                {% elif log.action == 'PUBLISH' %}bg-primary
+                {% elif log.action == 'DELETE' %}bg-danger
+                {% else %}bg-secondary
+                {% endif %}
+              ">{{ log.action }}</span>
+            </td>
+            <td><code>{{ log.model_name }}</code></td>
+            <td class="text-muted small">{{ log.record_label|truncatechars:50 }}</td>
+            <td class="text-muted small">{{ log.description|truncatechars:80 }}</td>
+            {% if profile.is_hod %}
+            <td>
+              {% if log.old_data and log.action == 'UPDATE' %}
+              <form method="post" action="{% url 'curriculum:rollback_audit' version.pk log.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-outline-warning btn-sm py-0 px-2"
+                        onclick="return confirm('Roll back this change? The previous state will be restored.')">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Rollback
+                </button>
+              </form>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+
+          <!-- Expandable diff row -->
+          {% if log.old_data or log.new_data %}
+          <tr class="table-light" style="font-size:0.78rem;">
+            <td></td>
+            <td colspan="{% if profile.is_hod %}5{% else %}4{% endif %}">
+              <div class="d-flex gap-4 py-1">
+                {% if log.old_data %}
+                <div>
+                  <span class="text-muted fw-semibold">Before:</span>
+                  <span class="diff-old ms-1">{{ log.old_data|truncatechars:150 }}</span>
+                </div>
+                {% endif %}
+                {% if log.new_data %}
+                <div>
+                  <span class="text-muted fw-semibold">After:</span>
+                  <span class="diff-new ms-1">{{ log.new_data|truncatechars:150 }}</span>
+                </div>
+                {% endif %}
+              </div>
+            </td>
+            {% if profile.is_hod %}<td></td>{% endif %}
+          </tr>
+          {% endif %}
+
+          {% empty %}
+          <tr>
+            <td colspan="{% if profile.is_hod %}7{% else %}6{% endif %}"
+                class="text-center text-muted py-5">
+              <i class="bi bi-journal-x me-2"></i>No audit log entries yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

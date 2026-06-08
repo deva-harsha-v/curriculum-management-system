@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-semibold mb-0">{{ title }}</h5>
+    <div class="text-muted small">{{ version.department.name }} · {{ version.regulation }}</div>
+  </div>
+  <a href="{{ back_url }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+{% if help_text %}
+<div class="alert alert-info py-2 mb-3" style="font-size:0.85rem;">
+  <i class="bi bi-info-circle me-2"></i>{{ help_text }}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ formset.management_form }}
+
+      <div class="table-responsive">
+        <table class="table formset-table align-middle">
+          <thead>
+            <tr>
+              {% for field in formset.forms.0.visible_fields %}
+              <th>{{ field.label }}</th>
+              {% endfor %}
+              <th>Delete</th>
+            </tr>
+          </thead>
+          <tbody id="formset-body">
+            {% for form in formset.forms %}
+            <tr class="formset-row {% if form.errors %}table-danger{% endif %}">
+              {% for field in form.visible_fields %}
+              <td>
+                {{ field }}
+                {% if field.errors %}
+                  <div class="text-danger" style="font-size:0.78rem;">{{ field.errors.0 }}</div>
+                {% endif %}
+              </td>
+              {% endfor %}
+              <td>
+                {% if form.instance.pk %}
+                  <div class="form-check">
+                    {{ form.DELETE }}
+                  </div>
+                {% endif %}
+                {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>Save All
+        </button>
+        <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="button" class="btn btn-outline-success ms-auto" id="add-row-btn">
+          <i class="bi bi-plus-lg me-1"></i>Add Row
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Simple formset add-row via cloning and incrementing index
+document.getElementById('add-row-btn').addEventListener('click', function() {
+  const tbody = document.getElementById('formset-body');
+  const totalForms = document.querySelector('[name$="-TOTAL_FORMS"]');
+  const formCount = parseInt(totalForms.value);
+  const rows = tbody.querySelectorAll('.formset-row');
+  if (rows.length === 0) return;
+  const lastRow = rows[rows.length - 1];
+  const newRow = lastRow.cloneNode(true);
+  // Update indices
+  newRow.innerHTML = newRow.innerHTML
+    .replace(/-(\d+)-/g, (m, n) => `-${formCount}-`)
+    .replace(/_((\d+))_/g, (m, n) => `_${formCount}_`);
+  // Clear values
+  newRow.querySelectorAll('input:not([type=hidden]):not([type=checkbox]), textarea, select')
+        .forEach(el => { el.value = ''; el.checked = false; });
+  newRow.querySelectorAll('.text-danger').forEach(el => el.remove());
+  newRow.classList.remove('table-danger');
+  tbody.appendChild(newRow);
+  totalForms.value = formCount + 1;
+});
+</script>
+{% endblock %}

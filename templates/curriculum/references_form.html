@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Reference Books{% endblock %}
+{% block page_title %}Reference Books{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">Reference Books</h4>
+        <p class="text-muted mb-0">
+            {{ course.code }} - {{ course.title }}
+        </p>
+    </div>
+
+    <a href="{% url 'curriculum:course_detail' version.pk course.pk %}"
+       class="btn btn-outline-secondary">
+        Back
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+
+        <form method="post">
+            {% csrf_token %}
+
+            {{ ref_formset.management_form }}
+
+            <table class="table table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th width="10%">No.</th>
+                        <th>Citation</th>
+                        <th width="10%">Delete</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for form in ref_formset %}
+                    <tr>
+                        <td>
+                            {{ form.number }}
+                        </td>
+
+                        <td>
+                            {{ form.citation }}
+                            {% if form.citation.errors %}
+                                <div class="text-danger small">
+                                    {{ form.citation.errors }}
+                                </div>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            {% if form.instance.pk %}
+                                {{ form.DELETE }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <button type="submit" class="btn btn-primary">
+                Save References
+            </button>
+
+            <a href="{% url 'curriculum:course_detail' version.pk course.pk %}"
+               class="btn btn-secondary">
+                Cancel
+            </a>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

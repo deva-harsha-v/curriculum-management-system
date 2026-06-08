@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} Course{% endblock %}
+{% block page_title %}{{ action }} Course{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-book me-2"></i>{{ action }} Course
+        <span class="text-muted fw-normal small ms-2">
+          {{ version.department.name }} · {{ version.regulation }}
+          {% if semester %}· {{ semester }}{% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+
+        {% if request.user.profile.is_faculty %}
+        <div class="alert alert-info py-2 mb-3" style="font-size:0.85rem;">
+          <i class="bi bi-git me-2"></i>
+          As faculty, your changes will be submitted as a <strong>change request</strong> for HOD review.
+        </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Course Code *</label>
+              {{ form.code }}
+              {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Course Title *</label>
+              {{ form.title }}
+              {% if form.title.errors %}<div class="text-danger small">{{ form.title.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Category</label>
+              {{ form.category }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Lectures (L)</label>
+              {{ form.lectures }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Tutorials (T)</label>
+              {{ form.tutorials }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Practicals (P)</label>
+              {{ form.practicals }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Credits</label>
+              {{ form.credits }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Display Order</label>
+              {{ form.display_order }}
+            </div>
+            <div class="col-md-4">
+              <div class="form-check mt-4">
+                {{ form.is_elective }}
+                <label class="form-check-label fw-semibold" for="{{ form.is_elective.id_for_label }}">
+                  Is Elective
+                </label>
+              </div>
+            </div>
+            <div class="col-md-4" id="elective-group-field">
+              <label class="form-label fw-semibold">Elective Group</label>
+              {{ form.elective_group }}
+              <div class="form-text">e.g. "Group A" for OR-type electives</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Prerequisites</label>
+              {{ form.prerequisites }}
+              <div class="form-text">Hold Ctrl/Cmd to select multiple</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Detailed Syllabus</label>
+              {{ form.syllabus_text }}
+              <div class="form-text">
+                Use double blank lines to separate paragraphs/topics.
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>
+              {% if request.user.profile.is_faculty %}Submit for Review{% else %}Save Course{% endif %}
+            </button>
+            <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const isElectiveCheck = document.getElementById('{{ form.is_elective.id_for_label }}');
+  const electiveGroupField = document.getElementById('elective-group-field');
+  function toggleElectiveGroup() {
+    electiveGroupField.style.display = isElectiveCheck.checked ? '' : 'none';
+  }
+  isElectiveCheck.addEventListener('change', toggleElectiveGroup);
+  toggleElectiveGroup();
+</script>
+{% endblock %}

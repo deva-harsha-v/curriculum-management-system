@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}HOD Dashboard – {{ dept.name }}{% endblock %}
+{% block page_title %}HOD Dashboard — {{ dept.name }}{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-journal-text"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ versions.count }}</div>
+        <div class="stat-label">Curriculum Versions</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-success bg-opacity-10 text-success">
+        <i class="bi bi-people"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ faculty_list.count }}</div>
+        <div class="stat-label">Faculty Members</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+        <i class="bi bi-hourglass-split"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ pending_count }}</div>
+        <div class="stat-label">Pending Requests</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-info bg-opacity-10 text-info">
+        <i class="bi bi-clock-history"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ recent_logs.count }}</div>
+        <div class="stat-label">Recent Activities</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-lightning-charge me-2"></i>Quick Actions</div>
+  <div class="card-body d-flex flex-wrap gap-2">
+    <a href="{% url 'curriculum:version_create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>New Curriculum Version
+    </a>
+    <a href="{% url 'accounts:create_faculty' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-person-plus me-1"></i>Add Faculty
+    </a>
+    <a href="{% url 'curriculum:version_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-journal-text me-1"></i>All Versions
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Left column -->
+  <div class="col-lg-8">
+
+    <!-- Pending Change Requests -->
+    <div class="card table-card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-hourglass-split text-warning me-2"></i>Pending Change Requests</span>
+        {% if pending_count > 0 %}
+          <span class="badge bg-warning text-dark">{{ pending_count }} pending</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if pending_requests %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Faculty</th>
+                <th>Version</th>
+                <th>Model</th>
+                <th>Submitted</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cr in pending_requests %}
+              <tr>
+                <td>{{ cr.requested_by.get_full_name|default:cr.requested_by.username }}</td>
+                <td><span class="badge bg-light text-dark border">{{ cr.curriculum_version.regulation }}</span></td>
+                <td><code>{{ cr.model_name }}</code></td>
+                <td class="text-muted small">{{ cr.created_at|date:"d M Y H:i" }}</td>
+                <td>
+                  <a href="{% url 'curriculum:change_request_review' cr.curriculum_version.pk cr.pk %}"
+                     class="btn btn-sm btn-warning py-0 px-2">
+                    <i class="bi bi-eye me-1"></i>Review
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-check-circle text-success me-2"></i>No pending change requests.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Curriculum Versions -->
+    <div class="card table-card">
+      <div class="card-header"><i class="bi bi-journal-text me-2"></i>Curriculum Versions</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Regulation</th>
+                <th>Year</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in versions %}
+              <tr>
+                <td><strong>{{ v.regulation }}</strong></td>
+                <td>{{ v.academic_year }}</td>
+                <td>
+                  <span class="badge badge-{{ v.status|lower }}">{{ v.get_status_display }}</span>
+                </td>
+                <td class="text-muted small">{{ v.created_at|date:"d M Y" }}</td>
+                <td class="d-flex gap-1 flex-wrap">
+                  <a href="{% url 'curriculum:version_detail' v.pk %}"
+                     class="btn btn-sm btn-outline-primary py-0 px-2">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  <a href="{% url 'curriculum:change_requests' v.pk %}"
+                     class="btn btn-sm btn-outline-warning py-0 px-2" title="Change Requests">
+                    <i class="bi bi-git"></i>
+                  </a>
+                  <a href="{% url 'curriculum:audit_log' v.pk %}"
+                     class="btn btn-sm btn-outline-secondary py-0 px-2" title="Audit Log">
+                    <i class="bi bi-clock-history"></i>
+                  </a>
+                  <a href="{% url 'pdf_generator:pdf_preview' v.pk %}"
+                     class="btn btn-sm btn-outline-danger py-0 px-2" title="PDF Preview">
+                    <i class="bi bi-file-pdf"></i>
+                  </a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                  No curriculum versions yet.
+                  <a href="{% url 'curriculum:version_create' %}">Create one</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right column -->
+  <div class="col-lg-4">
+
+    <!-- Faculty List -->
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-people me-2"></i>Faculty ({{ faculty_list.count }})</span>
+        <a href="{% url 'accounts:create_faculty' %}" class="btn btn-sm btn-outline-primary py-0 px-2">
+          <i class="bi bi-plus-lg"></i>
+        </a>
+      </div>
+      <div class="list-group list-group-flush">
+        {% for fac in faculty_list %}
+        <div class="list-group-item d-flex align-items-center justify-content-between py-2">
+          <div>
+            <div class="fw-semibold" style="font-size:0.88rem;">
+              {{ fac.user.get_full_name|default:fac.user.username }}
+            </div>
+            <div class="text-muted" style="font-size:0.77rem;">{{ fac.user.email }}</div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            {% if fac.user.is_active %}
+              <span class="badge bg-success bg-opacity-10 text-success" style="font-size:0.7rem;">Active</span>
+            {% else %}
+              <span class="badge bg-danger bg-opacity-10 text-danger" style="font-size:0.7rem;">Inactive</span>
+            {% endif %}
+            <form method="post" action="{% url 'accounts:remove_faculty' fac.user.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                      title="{% if fac.user.is_active %}Deactivate{% else %}Activate{% endif %}"
+                      onclick="return confirm('Toggle this faculty account?')">
+                <i class="bi bi-{% if fac.user.is_active %}person-dash{% else %}person-check{% endif %}"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <div class="list-group-item text-muted text-center py-3" style="font-size:0.85rem;">
+          No faculty members yet.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history me-2"></i>Recent Activity</div>
+      <div class="list-group list-group-flush" style="max-height:320px;overflow-y:auto;">
+        {% for log in recent_logs %}
+        <div class="list-group-item py-2">
+          <div class="d-flex align-items-start gap-2">
+            <span class="badge bg-secondary bg-opacity-10 text-dark mt-1" style="font-size:0.68rem;">
+              {{ log.action }}
+            </span>
+            <div>
+              <div style="font-size:0.82rem;" class="fw-semibold">
+                {{ log.user.get_full_name|default:log.user.username|default:"System" }}
+              </div>
+              <div class="text-muted" style="font-size:0.77rem;">
+                {{ log.model_name }}{% if log.record_label %}: {{ log.record_label|truncatechars:40 }}{% endif %}
+              </div>
+              <div class="text-muted" style="font-size:0.72rem;">{{ log.timestamp|date:"d M H:i" }}</div>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="list-group-item text-muted text-center py-3" style="font-size:0.85rem;">
+          No activity yet.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

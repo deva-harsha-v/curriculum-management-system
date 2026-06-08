@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Change Requests – {{ version }}{% endblock %}
+{% block page_title %}Change Requests — {{ version.regulation }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-semibold mb-0">Change Requests</h5>
+    <div class="text-muted small">{{ version.department.name }} · {{ version.regulation }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="?status=PENDING"
+       class="btn btn-sm {% if status_filter == 'PENDING' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+      Pending
+    </a>
+    <a href="?status=APPROVED"
+       class="btn btn-sm {% if status_filter == 'APPROVED' %}btn-success{% else %}btn-outline-success{% endif %}">
+      Approved
+    </a>
+    <a href="?status=REJECTED"
+       class="btn btn-sm {% if status_filter == 'REJECTED' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+      Rejected
+    </a>
+    <a href="?status=ALL"
+       class="btn btn-sm {% if status_filter == 'ALL' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      All
+    </a>
+    <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+{% if change_requests %}
+<div class="row g-3">
+  {% for cr in change_requests %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+          <span class="badge badge-{{ cr.status|lower }}">{{ cr.get_status_display }}</span>
+          <span class="fw-semibold" style="font-size:0.9rem;">
+            <i class="bi bi-person me-1"></i>
+            {{ cr.requested_by.get_full_name|default:cr.requested_by.username }}
+          </span>
+          <span class="text-muted small">
+            <code>{{ cr.model_name }}</code>
+            {% if cr.field_changed %}&nbsp;·&nbsp;{{ cr.field_changed }}{% endif %}
+          </span>
+        </div>
+        <div class="text-muted small">
+          {{ cr.created_at|date:"d M Y H:i" }}
+          {% if cr.reviewed_at %}· Reviewed {{ cr.reviewed_at|date:"d M Y H:i" }}{% endif %}
+        </div>
+      </div>
+
+      <div class="card-body">
+        <!-- Diff display -->
+        {% with diffs=cr.get_diff %}
+        {% if diffs %}
+        <div class="mb-3">
+          <div class="fw-semibold small text-muted mb-2">Changes:</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0" style="font-size:0.83rem;">
+              <thead class="table-light">
+                <tr><th>Field</th><th>Before</th><th>After</th></tr>
+              </thead>
+              <tbody>
+                {% for field, old_val, new_val in diffs %}
+                <tr>
+                  <td><code>{{ field }}</code></td>
+                  <td><span class="diff-old">{{ old_val|truncatechars:200 }}</span></td>
+                  <td><span class="diff-new">{{ new_val|truncatechars:200 }}</span></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% if cr.hod_comment %}
+        <div class="mb-3 p-2 rounded" style="background:#f8f9fa; font-size:0.85rem;">
+          <i class="bi bi-chat-left-text me-2 text-muted"></i>
+          <strong>HOD Comment:</strong> {{ cr.hod_comment }}
+        </div>
+        {% endif %}
+
+        {% if cr.status == 'PENDING' and profile.is_hod or cr.status == 'PENDING' and profile.is_admin %}
+        <form method="post" action="{% url 'curriculum:change_request_review' version.pk cr.pk %}">
+          {% csrf_token %}
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">Comment (optional)</label>
+            <textarea name="hod_comment" class="form-control form-control-sm" rows="2"
+                      placeholder="Add a note for the faculty..."></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" name="action" value="approve"
+                    class="btn btn-sm btn-success"
+                    onclick="return confirm('Approve this change? It will be applied immediately.')">
+              <i class="bi bi-check-circle me-1"></i>Approve & Apply
+            </button>
+            <button type="submit" name="action" value="reject"
+                    class="btn btn-sm btn-danger"
+                    onclick="return confirm('Reject this change?')">
+              <i class="bi bi-x-circle me-1"></i>Reject
+            </button>
+          </div>
+        </form>
+        {% endif %}
+
+        {% if cr.reviewed_by %}
+        <div class="text-muted small mt-2">
+          Reviewed by: {{ cr.reviewed_by.get_full_name|default:cr.reviewed_by.username }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card">
+  <div class="card-body text-center text-muted py-6">
+    <i class="bi bi-check-all fs-2 text-success d-block mb-3"></i>
+    No change requests with status: <strong>{{ status_filter }}</strong>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Course Outcomes – {{ course.code }}{% endblock %}
+{% block page_title %}Course Outcomes — {{ course.code }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-semibold mb-0">{{ course.code }} – {{ course.title }}</h5>
+    <div class="text-muted small">{{ version.department.name }} · {{ version.regulation }}</div>
+  </div>
+  <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Course
+  </a>
+</div>
+
+{% if request.user.profile.is_faculty %}
+<div class="alert alert-info py-2 mb-3" style="font-size:0.85rem;">
+  <i class="bi bi-git me-2"></i>
+  Changes will be submitted as a change request for HOD review.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-check me-2"></i>Course Outcomes</div>
+  <div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ co_formset.management_form }}
+
+      <div class="table-responsive">
+        <table class="table formset-table align-middle">
+          <thead>
+            <tr>
+              <th style="width:90px;">CO Number</th>
+              <th>Description</th>
+              <th style="width:70px;">Delete</th>
+            </tr>
+          </thead>
+          <tbody id="co-formset-body">
+            {% for form in co_formset.forms %}
+            <tr class="formset-row {% if form.errors %}table-danger{% endif %}">
+              <td>
+                {{ form.number }}
+                {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                {% if form.number.errors %}
+                  <div class="text-danger small">{{ form.number.errors.0 }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {{ form.description }}
+                {% if form.description.errors %}
+                  <div class="text-danger small">{{ form.description.errors.0 }}</div>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if form.instance.pk %}
+                  {{ form.DELETE }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>
+          {% if request.user.profile.is_faculty %}Submit for Review{% else %}Save Outcomes{% endif %}
+        </button>
+        <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-outline-secondary">
+          Cancel
+        </a>
+        <button type="button" class="btn btn-outline-success ms-auto" id="add-co-btn">
+          <i class="bi bi-plus-lg me-1"></i>Add Outcome
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('add-co-btn').addEventListener('click', function () {
+  const tbody = document.getElementById('co-formset-body');
+  const totalForms = document.querySelector('[name$="-TOTAL_FORMS"]');
+  const count = parseInt(totalForms.value);
+  const rows = tbody.querySelectorAll('.formset-row');
+  if (!rows.length) return;
+  const newRow = rows[rows.length - 1].cloneNode(true);
+  newRow.innerHTML = newRow.innerHTML.replace(/-(\d+)-/g, `-${count}-`);
+  newRow.querySelectorAll('input:not([type=hidden]), textarea').forEach(el => {
+    el.value = '';
+    el.classList.remove('is-invalid');
+  });
+  newRow.querySelectorAll('.text-danger').forEach(el => el.remove());
+  newRow.classList.remove('table-danger');
+  tbody.appendChild(newRow);
+  totalForms.value = count + 1;
+});
+</script>
+{% endblock %}

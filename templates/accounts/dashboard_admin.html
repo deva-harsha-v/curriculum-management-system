@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block page_title %}Admin Dashboard{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+        <i class="bi bi-building"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ total_depts }}</div>
+        <div class="stat-label">Departments</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-success bg-opacity-10 text-success">
+        <i class="bi bi-people"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ total_users }}</div>
+        <div class="stat-label">Total Users</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+        <i class="bi bi-person-badge"></i>
+      </div>
+      <div>
+        <div class="stat-value">{{ departments|length }}</div>
+        <div class="stat-label">Active Departments</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-tile">
+      <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+        <i class="bi bi-journal-text"></i>
+      </div>
+      <div>
+        <div class="stat-value">—</div>
+        <div class="stat-label">System Admin</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-lightning-charge me-2"></i>Quick Actions</span>
+      </div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        <a href="{% url 'accounts:create_department' %}" class="btn btn-primary btn-sm">
+          <i class="bi bi-building-add me-1"></i>New Department
+        </a>
+        <a href="{% url 'accounts:create_hod' %}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-person-badge me-1"></i>Create HOD
+        </a>
+        <a href="{% url 'accounts:manage_users' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-people me-1"></i>Manage Users
+        </a>
+        <a href="{% url 'curriculum:version_list' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-journal-text me-1"></i>All Curriculum Versions
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Departments Table -->
+<div class="card table-card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-building me-2"></i>Departments</span>
+    <a href="{% url 'accounts:create_department' %}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-lg me-1"></i>Add Department
+    </a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Department Name</th>
+            <th>Degree</th>
+            <th>HOD</th>
+            <th>Users</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dept in departments %}
+          <tr>
+            <td><span class="badge bg-primary bg-opacity-10 text-primary fw-semibold">{{ dept.code }}</span></td>
+            <td>{{ dept.name }}</td>
+            <td>{{ dept.degree }}</td>
+            <td>
+              {% with hod=dept.get_hod %}
+                {% if hod %}
+                  <span class="text-success fw-semibold">
+                    <i class="bi bi-person-check me-1"></i>{{ hod.get_full_name }}
+                  </span>
+                {% else %}
+                  <span class="text-danger small">
+                    <i class="bi bi-person-x me-1"></i>Not assigned
+                  </span>
+                {% endif %}
+              {% endwith %}
+            </td>
+            <td>
+              <span class="badge bg-secondary bg-opacity-10 text-dark">{{ dept.faculty_count }}</span>
+            </td>
+            <td>
+              <a href="{% url 'accounts:edit_department' dept.pk %}"
+                 class="btn btn-xs btn-outline-secondary btn-sm py-0 px-2">
+                <i class="bi bi-pencil"></i>
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              <i class="bi bi-building me-2"></i>No departments yet.
+              <a href="{% url 'accounts:create_department' %}">Create one</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

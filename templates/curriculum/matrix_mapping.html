@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load curriculum_extras %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-semibold mb-0">{{ title }}</h5>
+    <div class="text-muted small">{{ version.department.name }} · {{ version.regulation }}
+      &nbsp;·&nbsp; Enter strength: 1 (low), 2 (medium), 3 (high), blank = no relation
+    </div>
+  </div>
+  <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" action="{{ form_action }}" novalidate>
+      {% csrf_token %}
+      <div class="table-responsive">
+        <table class="table table-bordered mapping-grid mb-0" style="font-size:0.82rem;">
+          <thead>
+            <tr>
+              <th class="text-center" style="min-width:70px;">{{ row_label }}</th>
+              {% for col in col_items %}
+              <th class="text-center" style="min-width:52px;">{{ col_label }}{{ col.number }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in row_items %}
+            <tr>
+              <td class="fw-semibold text-center bg-light">
+                {{ row_label }}{{ row.number }}
+                {% if row.description %}
+                <div class="text-muted fw-normal" style="font-size:0.73rem; white-space:normal; max-width:120px;">
+                  {{ row.description|truncatechars:40 }}
+                </div>
+                {% endif %}
+              </td>
+              {% for col in col_items %}
+              {% with field_name=row_label|lower|add:"_"|add:row.number|stringformat:"s"|add:"_"|add:col_label|lower|add:"_"|add:col.number|stringformat:"s" %}
+              <td class="text-center p-1">
+
+{% with row_map=matrix|get_item:row.number %}
+{% with value=row_map|get_item:col.number %}
+
+<input type="number"
+       name="{{ field_name }}"
+       min="1"
+       max="3"
+       step="1"
+       value="{{ value|default:'' }}"
+       class="form-control form-control-sm text-center p-1"
+       style="width:52px; font-size:0.82rem;"
+       placeholder="—">
+
+{% endwith %}
+{% endwith %}
+
+</td>
+              {% endwith %}
+              {% endfor %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="100" class="text-center text-muted py-4">
+                No {{ row_label }}s defined. Please add them first.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex gap-2 mt-3 align-items-center">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>Save Mappings
+        </button>
+        <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-outline-secondary">
+          Cancel
+        </a>
+        <span class="text-muted small ms-3">
+          <i class="bi bi-info-circle me-1"></i>
+          Only values 1, 2, or 3 are accepted. Leave blank for no mapping.
+        </span>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Fix: build correct field names from actual row/col data
+// The template tag approach above is a workaround; override via JS for accuracy
+document.querySelectorAll('.mapping-grid input[type=number]').forEach(inp => {
+  inp.addEventListener('input', function() {
+    const val = parseInt(this.value);
+    if (this.value !== '' && (isNaN(val) || val < 1 || val > 3)) {
+      this.classList.add('is-invalid');
+    } else {
+      this.classList.remove('is-invalid');
+    }
+  });
+});
+</script>
+{% endblock %}

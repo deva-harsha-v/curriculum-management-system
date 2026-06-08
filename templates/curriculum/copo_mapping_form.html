@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}CO-PO Mapping – {{ co }}{% endblock %}
+{% block page_title %}CO-PO Mapping — CO{{ co.number }} of {{ course.code }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-semibold mb-0">CO{{ co.number }}: {{ co.description|truncatechars:80 }}</h5>
+    <div class="text-muted small">{{ course.code }} – {{ course.title }} · {{ version.regulation }}</div>
+  </div>
+  <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+{% if request.user.profile.is_faculty %}
+<div class="alert alert-info py-2 mb-3" style="font-size:0.85rem;">
+  <i class="bi bi-git me-2"></i>
+  Your mapping changes will be submitted for HOD review.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-grid-3x3-gap me-2"></i>Map CO{{ co.number }} to Program Outcomes
+    <span class="text-muted fw-normal small ms-2">Strength: 1 = Low, 2 = Medium, 3 = High</span>
+  </div>
+  <div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <div class="table-responsive">
+        <table class="table table-bordered mapping-grid mb-0">
+          <thead>
+            <tr>
+              {% for po in pos %}
+              <th class="text-center" style="min-width:64px; font-size:0.82rem;">
+                PO{{ po.number }}
+                <div class="text-muted fw-normal" style="font-size:0.7rem; white-space:normal; max-width:80px;">
+                  {{ po.description|truncatechars:30 }}
+                </div>
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {% for po in pos %}
+              <td class="text-center p-2">
+                <input
+                  type="number"
+                  name="po_{{ po.number }}"
+                  min="1" max="3" step="1"
+                  value="{{ mapping.mappings|default_if_none:{} }}"
+                  class="form-control form-control-sm text-center"
+                  style="width:56px; margin:auto;"
+                  placeholder="—"
+                  id="po_{{ po.number }}_input"
+                >
+              </td>
+              {% endfor %}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>
+          {% if request.user.profile.is_faculty %}Submit for Review{% else %}Save Mapping{% endif %}
+        </button>
+        <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-outline-secondary">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Pre-fill existing mapping values
+for (const [poNum, strength] of Object.entries(existing)) {
+  const inp = document.getElementById(`po_${poNum}_input`);
+  if (inp) inp.value = strength;
+}
+
+// Validation
+document.querySelectorAll('.mapping-grid input[type=number]').forEach(inp => {
+  inp.addEventListener('input', function () {
+    const v = parseInt(this.value);
+    if (this.value !== '' && (isNaN(v) || v < 1 || v > 3)) {
+      this.classList.add('is-invalid');
+    } else {
+      this.classList.remove('is-invalid');
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Course List</h2>
+
+{% for semester in semesters %}
+    <h4>{{ semester }}</h4>
+
+    <ul>
+    {% for course in semester.courses.all %}
+        <li>
+            {{ course.code }} - {{ course.title }}
+        </li>
+    {% empty %}
+        <li>No courses</li>
+    {% endfor %}
+    </ul>
+{% endfor %}
+
+{% endblock %}
