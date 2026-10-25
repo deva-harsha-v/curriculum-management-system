@@ -1,30 +1,34 @@
 {% extends "base.html" %}
+{% load curriculum_extras %}
+
 {% block title %}CO-PO Mapping – {{ co }}{% endblock %}
 {% block page_title %}CO-PO Mapping — CO{{ co.number }} of {{ course.code }}{% endblock %}
 {% block nav_curriculum %}active{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
     <h5 class="fw-semibold mb-0">CO{{ co.number }}: {{ co.description|truncatechars:80 }}</h5>
     <div class="text-muted small">{{ course.code }} – {{ course.title }} · {{ version.regulation }}</div>
   </div>
   <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-sm btn-outline-secondary">
-    <i class="bi bi-arrow-left me-1"></i>Back
+    <i class="bi bi-arrow-left me-1"></i>Back to Course
   </a>
 </div>
 
 {% if request.user.profile.is_faculty %}
-<div class="alert alert-info py-2 mb-3" style="font-size:0.85rem;">
-  <i class="bi bi-git me-2"></i>
-  Your mapping changes will be submitted for HOD review.
+<div class="alert alert-info py-2 mb-3 d-flex align-items-center" style="font-size:0.85rem;">
+  <i class="bi bi-info-circle me-2 fs-6"></i>
+  <span>As a faculty member, your CO-PO mapping changes will be submitted to the HOD as a change request for review and approval.</span>
 </div>
 {% endif %}
 
 <div class="card">
-  <div class="card-header">
-    <i class="bi bi-grid-3x3-gap me-2"></i>Map CO{{ co.number }} to Program Outcomes
-    <span class="text-muted fw-normal small ms-2">Strength: 1 = Low, 2 = Medium, 3 = High</span>
+  <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <i class="bi bi-grid-3x3-gap me-2"></i>Map CO{{ co.number }} to Program Outcomes (POs)
+    </div>
+    <span class="text-muted fw-normal small">Strength: 1 = Low, 2 = Medium, 3 = High, Blank = None</span>
   </div>
   <div class="card-body">
     <form method="post" novalidate>
@@ -36,27 +40,36 @@
               {% for po in pos %}
               <th class="text-center" style="min-width:64px; font-size:0.82rem;">
                 PO{{ po.number }}
-                <div class="text-muted fw-normal" style="font-size:0.7rem; white-space:normal; max-width:80px;">
-                  {{ po.description|truncatechars:30 }}
+                <div class="text-muted fw-normal" style="font-size:0.7rem; white-space:normal; max-width:85px;">
+                  {{ po.description|truncatechars:35 }}
                 </div>
               </th>
+              {% empty %}
+              <th class="text-center text-muted">No Program Outcomes (POs) defined for this curriculum version.</th>
               {% endfor %}
             </tr>
           </thead>
           <tbody>
             <tr>
               {% for po in pos %}
+              {% with strength=mapping.mappings|get_item:po.number %}
               <td class="text-center p-2">
                 <input
                   type="number"
                   name="po_{{ po.number }}"
                   min="1" max="3" step="1"
-                  value="{{ mapping.mappings|default_if_none:{} }}"
+                  value="{{ strength|default:'' }}"
                   class="form-control form-control-sm text-center"
                   style="width:56px; margin:auto;"
                   placeholder="—"
                   id="po_{{ po.number }}_input"
+                  aria-label="Mapping for PO{{ po.number }}"
                 >
+              </td>
+              {% endwith %}
+              {% empty %}
+              <td class="text-center text-muted py-3">
+                Please define Program Outcomes under the curriculum version before configuring mappings.
               </td>
               {% endfor %}
             </tr>
@@ -64,14 +77,17 @@
         </table>
       </div>
 
-      <div class="d-flex gap-2 mt-4">
+      <div class="d-flex gap-2 mt-4 align-items-center">
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-save me-1"></i>
-          {% if request.user.profile.is_faculty %}Submit for Review{% else %}Save Mapping{% endif %}
+          {% if request.user.profile.is_faculty %}Submit Change Request{% else %}Save Mapping{% endif %}
         </button>
         <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-outline-secondary">
           Cancel
         </a>
+        <span class="text-muted small ms-2">
+          <i class="bi bi-info-circle me-1"></i>Only values 1, 2, or 3 are accepted.
+        </span>
       </div>
     </form>
   </div>
@@ -80,16 +96,9 @@
 
 {% block extra_js %}
 <script>
-// Pre-fill existing mapping values
-for (const [poNum, strength] of Object.entries(existing)) {
-  const inp = document.getElementById(`po_${poNum}_input`);
-  if (inp) inp.value = strength;
-}
-
-// Validation
 document.querySelectorAll('.mapping-grid input[type=number]').forEach(inp => {
   inp.addEventListener('input', function () {
-    const v = parseInt(this.value);
+    const v = parseInt(this.value, 10);
     if (this.value !== '' && (isNaN(v) || v < 1 || v > 3)) {
       this.classList.add('is-invalid');
     } else {

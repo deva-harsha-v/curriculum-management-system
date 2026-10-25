@@ -1,9 +1,10 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login – NIT AP Curriculum Manager</title>
+  <title>Login – {{ INSTITUTION_NAME|default:"Curriculum Management System" }}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
   <style>
@@ -11,41 +12,46 @@
       min-height: 100vh;
       background: linear-gradient(135deg, #003366 0%, #00509e 60%, #c8102e 100%);
       display: flex; align-items: center; justify-content: center;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      padding: 1rem;
     }
     .login-card {
-      width: 100%; max-width: 420px;
+      width: 100%; max-width: 440px;
       background: #fff; border-radius: 16px;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.25);
       overflow: hidden;
     }
     .login-header {
       background: #003366;
-      padding: 2rem 2rem 1.5rem;
+      padding: 2.2rem 2rem 1.6rem;
       text-align: center; color: #fff;
     }
-    .login-header .institute { font-size: 0.8rem; opacity: 0.8; letter-spacing: 0.04em; }
-    .login-header h2 { font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0 0; }
+    .login-header .institute {
+      font-size: 0.8rem; opacity: 0.85;
+      letter-spacing: 0.06em; font-weight: 600;
+      text-transform: uppercase;
+    }
+    .login-header h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0 0; }
     .login-body { padding: 2rem; }
-    .login-body label { font-weight: 600; font-size: 0.85rem; color: #333; }
-    .login-body .form-control { border-radius: 8px; font-size: 0.9rem; }
+    .login-body label { font-weight: 600; font-size: 0.85rem; color: #333; margin-bottom: 0.35rem; }
+    .login-body .form-control { border-radius: 8px; font-size: 0.9rem; padding: 0.6rem 0.8rem; }
     .login-body .btn-login {
-      width: 100%; padding: 0.65rem;
+      width: 100%; padding: 0.7rem;
       background: #003366; color: #fff;
       border: none; border-radius: 8px;
       font-weight: 600; font-size: 0.95rem;
       transition: background 0.2s;
     }
     .login-body .btn-login:hover { background: #00509e; }
-    .error-msg { background: #fff3f3; border: 1px solid #f5c6cb; border-radius: 8px; padding: 0.75rem 1rem; }
+    .error-msg { background: #fff3f3; border: 1px solid #f5c6cb; border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; }
   </style>
 </head>
 <body>
 <div class="login-card">
   <div class="login-header">
-    <div class="institute">NATIONAL INSTITUTE OF TECHNOLOGY ANDHRA PRADESH</div>
+    <div class="institute">{{ INSTITUTION_NAME|default:"Academic Institution" }}</div>
     <h2>Curriculum Management System</h2>
-    <div class="mt-2" style="font-size:0.82rem; opacity:0.7">Sign in to continue</div>
+    <div class="mt-2" style="font-size:0.82rem; opacity:0.8">Sign in to your account</div>
   </div>
 
   <div class="login-body">
@@ -73,7 +79,7 @@
           {{ form.password }}
           <button type="button"
                   class="btn btn-sm position-absolute end-0 top-50 translate-middle-y me-1 text-muted"
-                  onclick="togglePwd()" style="background:none;border:none;">
+                  onclick="togglePwd()" style="background:none;border:none;" aria-label="Toggle password visibility">
             <i class="bi bi-eye" id="eye-icon"></i>
           </button>
         </div>
@@ -88,7 +94,7 @@
     </form>
 
     <div class="text-center mt-3 text-muted" style="font-size:0.8rem;">
-      Contact your administrator to create an account.
+      Contact your administrator if you need account assistance.
     </div>
   </div>
 </div>
@@ -98,12 +104,15 @@
     const inp = document.getElementById('{{ form.password.id_for_label }}');
     const icon = document.getElementById('eye-icon');
     if (inp.type === 'password') {
-      inp.type = 'text'; icon.className = 'bi bi-eye-slash';
+      inp.type = 'text';
+      icon.classList.remove('bi-eye');
+      icon.classList.add('bi-eye-slash');
     } else {
-      inp.type = 'password'; icon.className = 'bi bi-eye';
+      inp.type = 'password';
+      icon.classList.remove('bi-eye-slash');
+      icon.classList.add('bi-eye');
     }
   }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

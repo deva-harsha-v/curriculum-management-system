@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Review Change Request #{{ cr.pk }} – {{ version.regulation }}{% endblock %}
+{% block page_title %}Review Change Request #{{ cr.pk }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-semibold mb-0">Change Request #{{ cr.pk }}</h5>
+    <div class="text-muted small">
+      {{ version.department.name }} ({{ version.department.code }}) · {{ version.regulation }} · {{ version.academic_year }}
+    </div>
+  </div>
+  <a href="{% url 'curriculum:change_requests' version.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Change Requests
+  </a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <!-- Diff / Change Details Card -->
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-file-diff me-2"></i>Proposed Changes</span>
+        <span class="badge badge-{{ cr.status|lower }}">{{ cr.get_status_display }}</span>
+      </div>
+      <div class="card-body">
+        {% with diffs=cr.get_diff %}
+        {% if diffs %}
+        <div class="table-responsive">
+          <table class="table table-bordered mb-0" style="font-size:0.875rem;">
+            <thead class="table-light">
+              <tr>
+                <th style="width:25%;">Field</th>
+                <th style="width:37.5%;">Original (Before)</th>
+                <th style="width:37.5%;">Proposed (After)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for field, old_val, new_val in diffs %}
+              <tr>
+                <td class="fw-semibold"><code>{{ field }}</code></td>
+                <td>
+                  {% if old_val %}
+                    <span class="diff-old d-inline-block p-1 text-wrap text-break">{{ old_val }}</span>
+                  {% else %}
+                    <span class="text-muted fst-italic">None (New)</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if new_val %}
+                    <span class="diff-new d-inline-block p-1 text-wrap text-break">{{ new_val }}</span>
+                  {% else %}
+                    <span class="text-muted fst-italic">Removed</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-light border mb-0 text-muted">
+          <i class="bi bi-info-circle me-1"></i>
+          Raw data changed:
+          <pre class="mt-2 mb-0" style="font-size:0.8rem;">{{ cr.new_data }}</pre>
+        </div>
+        {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+
+    <!-- Review Action Card (if Pending) -->
+    {% if cr.status == 'PENDING' %}
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-check2-square me-2"></i>Review Decision
+      </div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label for="{{ form.hod_comment.id_for_label }}" class="form-label fw-semibold">
+              HOD / Reviewer Comment (optional)
+            </label>
+            {{ form.hod_comment }}
+            {% if form.hod_comment.errors %}
+            <div class="text-danger small mt-1">{{ form.hod_comment.errors.0 }}</div>
+            {% endif %}
+            <div class="form-text">Your feedback will be logged and visible to the faculty requester.</div>
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" name="action" value="approve"
+                    class="btn btn-success"
+                    data-confirm="Approve this change? It will be permanently applied to the curriculum database.">
+              <i class="bi bi-check-circle me-1"></i>Approve & Apply
+            </button>
+            <button type="submit" name="action" value="reject"
+                    class="btn btn-danger"
+                    data-confirm="Reject this change request? The proposal will not be applied.">
+              <i class="bi bi-x-circle me-1"></i>Reject Request
+            </button>
+            <a href="{% url 'curriculum:change_requests' version.pk %}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <!-- Already Reviewed Info -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-journal-check me-2"></i>Review Outcome
+      </div>
+      <div class="card-body">
+        <p class="mb-2">
+          <strong>Decision:</strong>
+          <span class="badge badge-{{ cr.status|lower }}">{{ cr.get_status_display }}</span>
+        </p>
+        {% if cr.hod_comment %}
+        <div class="p-3 bg-light rounded border mb-2">
+          <strong>Reviewer Feedback:</strong>
+          <p class="mb-0 mt-1">{{ cr.hod_comment }}</p>
+        </div>
+        {% endif %}
+        <div class="text-muted small">
+          Processed by <strong>{{ cr.reviewed_by.get_full_name|default:cr.reviewed_by.username }}</strong>
+          {% if cr.reviewed_at %}on {{ cr.reviewed_at|date:"d M Y \a\t H:i" }}{% endif %}.
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Sidebar Info Card -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-info-circle me-2"></i>Request Details
+      </div>
+      <div class="card-body" style="font-size:0.875rem;">
+        <div class="mb-3">
+          <div class="text-muted small">Requested By</div>
+          <div class="fw-semibold">{{ cr.requested_by.get_full_name|default:cr.requested_by.username }}</div>
+          <div class="text-muted small">{{ cr.requested_by.email }}</div>
+        </div>
+
+        <div class="mb-3">
+          <div class="text-muted small">Target Component</div>
+          <div><code>{{ cr.model_name }}</code></div>
+          {% if cr.record_id %}
+          <div class="text-muted small">Record ID: #{{ cr.record_id }}</div>
+          {% endif %}
+        </div>
+
+        {% if cr.field_changed %}
+        <div class="mb-3">
+          <div class="text-muted small">Field(s) Modified</div>
+          <div><strong>{{ cr.field_changed }}</strong></div>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+          <div class="text-muted small">Submission Timestamp</div>
+          <div>{{ cr.created_at|date:"d M Y H:i:s" }}</div>
+        </div>
+
+        <div class="pt-2 border-top">
+          <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-journal-text me-1"></i>View Full Curriculum
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

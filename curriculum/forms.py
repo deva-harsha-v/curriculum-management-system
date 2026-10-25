@@ -2,6 +2,7 @@ import json
 from django import forms
 from django.forms import inlineformset_factory
 
+from accounts.models import Department
 from .models import (
     CurriculumVersion, GraduateAttribute, PEO, MissionPEOMapping, PEOGAMapping,
     ProgramOutcome, POPEOMapping, CourseCategory, Semester, Course,
@@ -20,6 +21,12 @@ W_NUMBER = {'class': 'form-control', 'style': 'width:80px'}
 # ─────────────────────────────────────────────
 
 class CurriculumVersionForm(forms.ModelForm):
+    department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        widget=forms.Select(attrs=W_SELECT),
+        required=False,
+        label='Department'
+    )
     institute_mission_text = forms.CharField(
         widget=forms.Textarea(attrs={**W_TEXTAREA, 'rows': 5,
                               'placeholder': 'Enter each mission statement on a new line'}),
@@ -36,6 +43,7 @@ class CurriculumVersionForm(forms.ModelForm):
     class Meta:
         model = CurriculumVersion
         fields = [
+            'department',
             'regulation', 'academic_year',
             'institute_name', 'institute_vision',
             'dept_vision', 'ga_intro',
@@ -49,8 +57,17 @@ class CurriculumVersionForm(forms.ModelForm):
             'ga_intro': forms.Textarea(attrs={**W_TEXTAREA, 'rows': 4}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, profile=None, **kwargs):
+        self.profile = profile
         super().__init__(*args, **kwargs)
+        if profile and profile.is_admin:
+            self.fields['department'].required = True
+            if self.instance and self.instance.pk:
+                self.fields['department'].initial = self.instance.department
+        else:
+            if 'department' in self.fields:
+                del self.fields['department']
+
         if self.instance and self.instance.pk:
             inst_missions = self.instance.institute_mission
             if isinstance(inst_missions, list):
@@ -61,6 +78,8 @@ class CurriculumVersionForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        if 'department' in self.cleaned_data and self.cleaned_data['department']:
+            instance.department = self.cleaned_data['department']
         inst_text = self.cleaned_data.get('institute_mission_text', '')
         instance.institute_mission = [
             line.strip() for line in inst_text.splitlines() if line.strip()
@@ -133,6 +152,25 @@ class MissionPEOMappingForm(forms.ModelForm):
                 'placeholder': '{"1": 2, "2": 3, "3": 1}'
             }),
         }
+
+    def clean_mappings(self):
+        data = self.cleaned_data.get('mappings')
+        if isinstance(data, str) and data.strip():
+            try:
+                parsed = json.loads(data)
+                if not isinstance(parsed, dict):
+                    raise forms.ValidationError("Mappings must be a JSON dictionary.")
+                for k, v in parsed.items():
+                    if str(v) not in ('1', '2', '3'):
+                        raise forms.ValidationError(f"Mapping strength for PEO {k} must be 1, 2, or 3.")
+                return parsed
+            except json.JSONDecodeError:
+                raise forms.ValidationError('Invalid JSON format. Example: {"1": 2, "2": 3}')
+        elif isinstance(data, dict):
+            for k, v in data.items():
+                if str(v) not in ('1', '2', '3'):
+                    raise forms.ValidationError(f"Mapping strength for PEO {k} must be 1, 2, or 3.")
+        return data or {}
 
 
 MissionPEOMappingFormSet = inlineformset_factory(
@@ -230,6 +268,8 @@ class CourseForm(forms.ModelForm):
 
     def __init__(self, *args, curriculum_version=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['display_order'].required = False
+        self.fields['display_order'].initial = 0
         if curriculum_version:
             self.fields['category'].queryset = CourseCategory.objects.filter(
                 curriculum_version=curriculum_version
@@ -244,6 +284,10 @@ class CourseForm(forms.ModelForm):
         else:
             self.fields['category'].queryset = CourseCategory.objects.none()
             self.fields['prerequisites'].queryset = Course.objects.none()
+
+    def clean_display_order(self):
+        val = self.cleaned_data.get('display_order')
+        return val if val is not None else 0
 
 
 # ─────────────────────────────────────────────
@@ -281,6 +325,25 @@ class COPOMappingForm(forms.ModelForm):
                 'placeholder': '{"1": 3, "2": 2, "6": 1}'
             }),
         }
+
+    def clean_mappings(self):
+        data = self.cleaned_data.get('mappings')
+        if isinstance(data, str) and data.strip():
+            try:
+                parsed = json.loads(data)
+                if not isinstance(parsed, dict):
+                    raise forms.ValidationError("Mappings must be a JSON dictionary.")
+                for k, v in parsed.items():
+                    if str(v) not in ('1', '2', '3'):
+                        raise forms.ValidationError(f"Mapping strength for PO {k} must be 1, 2, or 3.")
+                return parsed
+            except json.JSONDecodeError:
+                raise forms.ValidationError('Invalid JSON format. Example: {"1": 3, "2": 2}')
+        elif isinstance(data, dict):
+            for k, v in data.items():
+                if str(v) not in ('1', '2', '3'):
+                    raise forms.ValidationError(f"Mapping strength for PO {k} must be 1, 2, or 3.")
+        return data or {}
 
 
 # ─────────────────────────────────────────────

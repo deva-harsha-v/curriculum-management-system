@@ -25,7 +25,7 @@ class CurriculumVersion(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
 
     # Institute-level info (stored per version so old PDFs stay accurate)
-    institute_name = models.CharField(max_length=300, default="National Institute of Technology Andhra Pradesh")
+    institute_name = models.CharField(max_length=300, default="Curriculum Management System")
     institute_vision = models.TextField(blank=True)
     institute_mission = models.JSONField(default=list, help_text="List of mission statement strings")
 
@@ -107,6 +107,14 @@ class MissionPEOMapping(models.Model):
 
     class Meta:
         ordering = ['mission_order']
+
+    @property
+    def number(self):
+        return self.mission_order
+
+    @property
+    def description(self):
+        return self.mission_statement
 
     def __str__(self):
         return f"Mission {self.mission_order} → PEO mappings"

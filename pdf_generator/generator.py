@@ -20,6 +20,7 @@ Sections generated:
 
 import os
 import io
+import logging
 from pathlib import Path
 from django.conf import settings
 
@@ -41,6 +42,8 @@ from .styles import (
     course_header_style, peo_table_style, po_table_style,
 )
 
+logger = logging.getLogger(__name__)
+
 
 # ─────────────────────────────────────────────
 # Page number canvas
@@ -58,14 +61,13 @@ class _NumberedCanvas(rl_canvas.Canvas):
 
     def save(self):
         num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
+        for page_num, state in enumerate(self._saved_page_states, start=1):
             self.__dict__.update(state)
-            self._draw_page_number(num_pages)
+            self._draw_page_number(page_num, num_pages)
             rl_canvas.Canvas.showPage(self)
         rl_canvas.Canvas.save(self)
 
-    def _draw_page_number(self, page_count):
-        page_num = self._saved_page_states.index(dict(self.__dict__)) + 1
+    def _draw_page_number(self, page_num, page_count):
         self.setFont('Helvetica', 8)
         self.setFillColor(colors.HexColor('#666666'))
         self.drawCentredString(
@@ -526,14 +528,13 @@ class CurriculumPDFGenerator:
             col_widths = [
                 0.8 * cm,   # S.No
                 2.0 * cm,   # Course Code
-                CONTENT_WIDTH - 0.8 - 2.0 - 1.0 - 1.0 - 1.0 - 1.8 - 1.8,  # Title
+                CONTENT_WIDTH - (0.8 + 2.0 + 1.0 + 1.0 + 1.0 + 1.8 + 1.8) * cm,  # Title
                 1.0 * cm,   # L
                 1.0 * cm,   # T
                 1.0 * cm,   # P
                 1.8 * cm,   # Credits
                 1.8 * cm,   # Cat. Code
             ]
-            col_widths[3] = CONTENT_WIDTH - sum(col_widths[:3]) - sum(col_widths[4:])
 
             header_row = [
                 Paragraph("<b>S. No.</b>", self.styles['cell_bold_center']),
@@ -599,8 +600,9 @@ class CurriculumPDFGenerator:
         try:
             from .prereq_chart import generate_prereq_chart
             chart_path = generate_prereq_chart(v)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error generating prerequisite chart for %s: %s", v, e)
+            chart_path = None
 
         if chart_path and os.path.exists(chart_path):
             available_height = PAGE_HEIGHT - TOP_MARGIN - BOTTOM_MARGIN - 3 * cm
@@ -690,7 +692,7 @@ class CurriculumPDFGenerator:
         ]]
         header_col_widths = [
             1.6 * cm,
-            CONTENT_WIDTH - 1.6 - 1.4 - 2.0 - 2.2,
+            CONTENT_WIDTH - (1.6 + 1.4 + 2.0 + 2.2) * cm,
             1.4 * cm,
             2.0 * cm,
             2.2 * cm,

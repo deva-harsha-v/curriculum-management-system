@@ -58,9 +58,12 @@ def login_view(request):
 
 @login_required
 def logout_view(request):
-    logout(request)
-    messages.info(request, "You have been logged out.")
-    return redirect('accounts:login')
+    if request.method == 'POST':
+        logout(request)
+        messages.info(request, "You have been logged out.")
+        return redirect('accounts:login')
+    messages.warning(request, "Logout must be requested via a POST action.")
+    return redirect('accounts:dashboard')
 
 
 # ─────────────────────────────────────────────

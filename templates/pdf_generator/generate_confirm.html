@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm PDF Generation – {{ version }}{% endblock %}
+{% block page_title %}Generate Curriculum PDF — {{ version.regulation }}{% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-semibold mb-0">Generate Official Curriculum PDF</h5>
+    <div class="text-muted small">
+      {{ version.department.name }} ({{ version.department.code }}) · {{ version.regulation }} · {{ version.academic_year }}
+    </div>
+  </div>
+  <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Curriculum
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-primary text-white py-3">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-file-earmark-pdf me-2"></i>Official Curriculum Document Compilation
+        </h6>
+      </div>
+      <div class="card-body p-4">
+        <p class="text-secondary mb-4">
+          You are about to compile and generate the official curriculum syllabus booklet for:
+        </p>
+
+        <div class="p-3 bg-light rounded border mb-4">
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <span class="text-muted small d-block">Department</span>
+              <strong>{{ version.department.name }} ({{ version.department.code }})</strong>
+            </div>
+            <div class="col-sm-6">
+              <span class="text-muted small d-block">Degree & Regulation</span>
+              <strong>{{ version.department.degree }} — {{ version.regulation }}</strong>
+            </div>
+            <div class="col-sm-6">
+              <span class="text-muted small d-block">Academic Year</span>
+              <strong>{{ version.academic_year }}</strong>
+            </div>
+            <div class="col-sm-6">
+              <span class="text-muted small d-block">Status</span>
+              <span class="badge badge-{{ version.status|lower }}">{{ version.get_status_display }}</span>
+            </div>
+          </div>
+        </div>
+
+        <h6 class="fw-semibold mb-3">Included Sections in Compiled Document:</h6>
+        <ul class="list-unstyled mb-4">
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Institutional and Departmental Vision & Mission Statements</span>
+          </li>
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Graduate Attributes (GA) and Program Educational Objectives (PEOs)</span>
+          </li>
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Mission → PEO, PEO → GA, and PO → PEO Mapping Matrices</span>
+          </li>
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Curricular Category Components & Minimum Credit Distribution</span>
+          </li>
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Semester-wise Scheme of Instruction (Lectures, Tutorials, Practicals, Credits)</span>
+          </li>
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Prerequisite Dependency Chart (Graphviz / Structured Dependency Table)</span>
+          </li>
+          <li class="mb-2 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <span>Detailed Course Syllabi with Course Outcomes (CO) & Textbooks / References</span>
+          </li>
+        </ul>
+
+        <div class="alert alert-info d-flex align-items-center" role="alert">
+          <i class="bi bi-info-circle-fill fs-5 me-3 flex-shrink-0"></i>
+          <div style="font-size:0.875rem;">
+            PDF compilation renders all tables and layout styles in accordance with the official academic standards.
+            The generated document will be archived and available for download.
+          </div>
+        </div>
+
+        <form method="post" action="{% url 'pdf_generator:pdf_generate' version.pk %}">
+          {% csrf_token %}
+          <div class="d-flex gap-2 flex-wrap mt-4">
+            <button type="submit" class="btn btn-primary px-4">
+              <i class="bi bi-gear-wide-connected me-1"></i>Generate Official PDF
+            </button>
+            <a href="{% url 'pdf_generator:pdf_preview' version.pk %}" class="btn btn-outline-primary">
+              <i class="bi bi-eye me-1"></i>Preview Document
+            </a>
+            <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

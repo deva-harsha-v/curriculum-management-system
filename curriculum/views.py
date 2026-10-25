@@ -1,10 +1,11 @@
 import json
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, IntegrityError
 
 from accounts.models import Profile
 from .models import (
@@ -19,6 +20,8 @@ from .forms import (
     ReferenceBookFormSet, ChangeRequestReviewForm
 )
 
+logger = logging.getLogger(__name__)
+
 
 # ─────────────────────────────────────────────
 # Role helpers
@@ -27,28 +30,32 @@ from .forms import (
 def get_profile(request):
     try:
         return request.user.profile
-    except Profile.DoesNotExist:
+    except (Profile.DoesNotExist, AttributeError):
         return None
 
 
 def dept_required(view_func):
-    """Ensures user has a department."""
+    """Ensures user has a department or is admin."""
     @login_required
     def wrapper(request, *args, **kwargs):
         profile = get_profile(request)
-        if not profile or not profile.department:
+        if not profile:
+            return HttpResponseForbidden("No user profile found.")
+        if not profile.is_admin and not profile.department:
             return HttpResponseForbidden("No department assigned.")
         return view_func(request, *args, **kwargs)
     return wrapper
 
 
 def get_version_or_403(request, version_pk):
-    """Get curriculum version, ensuring it belongs to user's department."""
+    """Get curriculum version, ensuring it belongs to user's department or user is admin."""
     profile = get_profile(request)
+    if not profile:
+        return None
     version = get_object_or_404(CurriculumVersion, pk=version_pk)
     if profile.is_admin:
         return version
-    if version.department != profile.department:
+    if not profile.department or version.department != profile.department:
         return None
     return version
 
@@ -76,15 +83,18 @@ def version_create(request):
         return HttpResponseForbidden("Only HOD or Admin can create curriculum versions.")
 
     if request.method == 'POST':
-        form = CurriculumVersionForm(request.POST)
+        form = CurriculumVersionForm(request.POST, profile=profile)
         if form.is_valid():
             version = form.save(commit=False)
-            version.department = profile.department
+            if profile.is_admin:
+                version.department = form.cleaned_data.get('department')
+            else:
+                version.department = profile.department
             version.created_by = request.user
             version.save()
             log_action(
                 user=request.user,
-                department=profile.department,
+                department=version.department,
                 action=AuditLog.ACTION_CREATE,
                 model_name='CurriculumVersion',
                 record_id=version.pk,
@@ -95,7 +105,7 @@ def version_create(request):
             messages.success(request, f"Curriculum version '{version}' created.")
             return redirect('curriculum:version_detail', pk=version.pk)
     else:
-        form = CurriculumVersionForm()
+        form = CurriculumVersionForm(profile=profile)
     return render(request, 'curriculum/version_form.html', {'form': form, 'action': 'Create'})
 
 
@@ -123,7 +133,7 @@ def version_detail(request, pk):
 def version_edit(request, pk):
     profile = get_profile(request)
     if not profile or profile.role not in (Profile.ROLE_HOD, Profile.ROLE_ADMIN):
-        return HttpResponseForbidden("Only HOD can edit curriculum versions.")
+        return HttpResponseForbidden("Only HOD or Admin can edit curriculum versions.")
 
     version = get_version_or_403(request, pk)
     if version is None:
@@ -132,12 +142,12 @@ def version_edit(request, pk):
         messages.error(request, "This version is published/archived and cannot be edited.")
         return redirect('curriculum:version_detail', pk=pk)
 
-    form = CurriculumVersionForm(request.POST or None, instance=version)
+    form = CurriculumVersionForm(request.POST or None, instance=version, profile=profile)
     if request.method == 'POST' and form.is_valid():
         old = {'regulation': version.regulation, 'academic_year': version.academic_year}
         form.save()
         log_action(
-            user=request.user, department=profile.department,
+            user=request.user, department=version.department,
             action=AuditLog.ACTION_UPDATE, model_name='CurriculumVersion',
             record_id=version.pk, record_label=str(version),
             old_data=old, new_data={'regulation': version.regulation},
@@ -151,8 +161,8 @@ def version_edit(request, pk):
 @login_required
 def version_publish(request, pk):
     profile = get_profile(request)
-    if not profile or not profile.is_hod:
-        return HttpResponseForbidden("Only HOD can publish.")
+    if not profile or not (profile.is_hod or profile.is_admin):
+        return HttpResponseForbidden("Only HOD or Admin can publish.")
     version = get_version_or_403(request, pk)
     if version is None:
         return HttpResponseForbidden()
@@ -160,12 +170,34 @@ def version_publish(request, pk):
         version.status = CurriculumVersion.STATUS_PUBLISHED
         version.save()
         log_action(
-            user=request.user, department=profile.department,
+            user=request.user, department=version.department,
             action=AuditLog.ACTION_PUBLISH, model_name='CurriculumVersion',
             record_id=version.pk, record_label=str(version),
             curriculum_version=version
         )
         messages.success(request, f"Curriculum '{version}' has been published.")
+    return redirect('curriculum:version_detail', pk=pk)
+
+
+@login_required
+def version_archive(request, pk):
+    profile = get_profile(request)
+    if not profile or not (profile.is_hod or profile.is_admin):
+        return HttpResponseForbidden("Only HOD or Admin can archive.")
+    version = get_version_or_403(request, pk)
+    if version is None:
+        return HttpResponseForbidden()
+    if request.method == 'POST':
+        version.status = CurriculumVersion.STATUS_ARCHIVED
+        version.save()
+        log_action(
+            user=request.user, department=version.department,
+            action=AuditLog.ACTION_UPDATE, model_name='CurriculumVersion',
+            record_id=version.pk, record_label=str(version),
+            new_data={'status': version.status},
+            curriculum_version=version
+        )
+        messages.info(request, f"Curriculum '{version}' has been archived.")
     return redirect('curriculum:version_detail', pk=pk)
 
 
@@ -187,7 +219,7 @@ def edit_graduate_attributes(request, version_pk):
     if request.method == 'POST' and formset.is_valid():
         formset.save()
         log_action(
-            user=request.user, department=profile.department,
+            user=request.user, department=version.department,
             action=AuditLog.ACTION_UPDATE, model_name='GraduateAttribute',
             record_label=str(version), curriculum_version=version
         )
@@ -216,7 +248,7 @@ def edit_peos(request, version_pk):
     if request.method == 'POST' and formset.is_valid():
         formset.save()
         log_action(
-            user=request.user, department=profile.department,
+            user=request.user, department=version.department,
             action=AuditLog.ACTION_UPDATE, model_name='PEO',
             record_label=str(version), curriculum_version=version
         )
@@ -233,21 +265,60 @@ def edit_peos(request, version_pk):
 def edit_mission_peo_mappings(request, version_pk):
     profile = get_profile(request)
     if not profile or profile.role not in (Profile.ROLE_HOD, Profile.ROLE_ADMIN):
-        return HttpResponseForbidden("Only HOD can edit curriculum versions.")
+        return HttpResponseForbidden("Only HOD or Admin can edit curriculum versions.")
     version = get_version_or_403(request, version_pk)
     if version is None:
         return HttpResponseForbidden()
 
-    formset = MissionPEOMappingFormSet(request.POST or None, instance=version)
-    if request.method == 'POST' and formset.is_valid():
-        formset.save()
+    peos = version.peos.all().order_by('number')
+
+    # Initialize mission mapping rows from version.dept_mission if none exist
+    mission_objs = list(version.mission_peo_mappings.all().order_by('mission_order'))
+    if not mission_objs and version.dept_mission:
+        for idx, stmt in enumerate(version.dept_mission, 1):
+            m = MissionPEOMapping.objects.create(
+                curriculum_version=version,
+                mission_statement=stmt,
+                mission_order=idx,
+                mappings={}
+            )
+            mission_objs.append(m)
+
+    if request.method == 'POST':
+        for row in mission_objs:
+            mappings = {}
+            for peo in peos:
+                val = request.POST.get(f'mission_{row.mission_order}_peo_{peo.number}', '').strip()
+                if val in ('1', '2', '3'):
+                    mappings[str(peo.number)] = int(val)
+            row.mappings = mappings
+            row.save()
+        log_action(
+            user=request.user, department=version.department,
+            action=AuditLog.ACTION_UPDATE, model_name='MissionPEOMapping',
+            record_label=f"Mission-PEO mappings for {version}", curriculum_version=version
+        )
         messages.success(request, "Mission–PEO mappings saved.")
         return redirect('curriculum:version_detail', pk=version_pk)
-    return render(request, 'curriculum/formset_page.html', {
-        'formset': formset, 'version': version,
-        'title': 'Mission → PEO Mappings',
-        'help_text': 'Enter mappings as JSON: {"1": 2, "2": 3} where key=PEO number, value=strength (1/2/3)',
-        'back_url': f'/curriculum/version/{version_pk}/'
+
+    matrix = {}
+    for row in mission_objs:
+        matrix[row.mission_order] = {}
+        for peo_num, strength in (row.mappings or {}).items():
+            try:
+                matrix[row.mission_order][int(peo_num)] = strength
+            except (ValueError, TypeError):
+                pass
+
+    return render(request, 'curriculum/matrix_mapping.html', {
+        'version': version,
+        'row_items': mission_objs,
+        'col_items': peos,
+        'row_label': 'Mission',
+        'col_label': 'PEO',
+        'matrix': matrix,
+        'title': 'Mission → PEO Mapping',
+        'form_action': request.path,
     })
 
 
@@ -268,7 +339,7 @@ def edit_program_outcomes(request, version_pk):
     if request.method == 'POST' and formset.is_valid():
         formset.save()
         log_action(
-            user=request.user, department=profile.department,
+            user=request.user, department=version.department,
             action=AuditLog.ACTION_UPDATE, model_name='ProgramOutcome',
             record_label=str(version), curriculum_version=version
         )
@@ -297,6 +368,11 @@ def edit_categories(request, version_pk):
     formset = CourseCategoryFormSet(request.POST or None, instance=version)
     if request.method == 'POST' and formset.is_valid():
         formset.save()
+        log_action(
+            user=request.user, department=version.department,
+            action=AuditLog.ACTION_UPDATE, model_name='CourseCategory',
+            record_label=str(version), curriculum_version=version
+        )
         messages.success(request, "Course categories saved.")
         return redirect('curriculum:version_detail', pk=version_pk)
     return render(request, 'curriculum/formset_page.html', {
@@ -323,9 +399,18 @@ def semester_create(request, version_pk):
         semester.curriculum_version = version
         try:
             semester.save()
+            log_action(
+                user=request.user, department=version.department,
+                action=AuditLog.ACTION_CREATE, model_name='Semester',
+                record_id=semester.pk, record_label=str(semester),
+                curriculum_version=version
+            )
             messages.success(request, f"Semester {semester} added.")
-        except Exception:
+        except IntegrityError:
             messages.error(request, "This semester already exists in this version.")
+        except Exception as e:
+            logger.exception("Failed to add semester for %s: %s", version, e)
+            messages.error(request, "Could not add semester due to an unexpected error.")
         return redirect('curriculum:version_detail', pk=version_pk)
     return render(request, 'curriculum/semester_form.html', {'form': form, 'version': version})
 
@@ -360,12 +445,6 @@ def course_create(request, version_pk, semester_pk):
     form = CourseForm(request.POST or None, curriculum_version=version)
 
     if request.method == 'POST' and form.is_valid():
-        print(
-    "DEBUG:",
-    request.user.username,
-    profile.role,
-    profile.is_faculty
-    )
         if profile.is_faculty:
             # Faculty: create ChangeRequest instead of direct save
             new_data = {k: str(v) for k, v in form.cleaned_data.items()
@@ -382,7 +461,7 @@ def course_create(request, version_pk, semester_pk):
                 new_data=new_data,
             )
             log_action(
-                user=request.user, department=profile.department,
+                user=request.user, department=version.department,
                 action=AuditLog.ACTION_CREATE, model_name='ChangeRequest',
                 record_label=f"New course: {form.cleaned_data.get('code')}",
                 curriculum_version=version
@@ -396,7 +475,7 @@ def course_create(request, version_pk, semester_pk):
             course.save()
             form.save_m2m()
             log_action(
-                user=request.user, department=profile.department,
+                user=request.user, department=version.department,
                 action=AuditLog.ACTION_CREATE, model_name='Course',
                 record_id=course.pk, record_label=str(course),
                 new_data={'code': course.code, 'title': course.title},
@@ -468,7 +547,7 @@ def course_edit(request, version_pk, course_pk):
                 new_data=new_data,
             )
             log_action(
-                user=request.user, department=profile.department,
+                user=request.user, department=version.department,
                 action=AuditLog.ACTION_UPDATE, model_name='ChangeRequest',
                 record_id=course.pk, record_label=str(course),
                 old_data=old_data, new_data=new_data, curriculum_version=version
@@ -480,7 +559,7 @@ def course_edit(request, version_pk, course_pk):
             old_data = {'code': course.code, 'title': course.title}
             form.save()
             log_action(
-                user=request.user, department=profile.department,
+                user=request.user, department=version.department,
                 action=AuditLog.ACTION_UPDATE, model_name='Course',
                 record_id=course.pk, record_label=str(course),
                 old_data=old_data, new_data={'code': course.code, 'title': course.title},
@@ -497,8 +576,8 @@ def course_edit(request, version_pk, course_pk):
 @login_required
 def course_delete(request, version_pk, course_pk):
     profile = get_profile(request)
-    if not profile or not profile.is_hod:
-        return HttpResponseForbidden("Only HOD can delete courses.")
+    if not profile or not (profile.is_hod or profile.is_admin):
+        return HttpResponseForbidden("Only HOD or Admin can delete courses.")
 
     version = get_version_or_403(request, version_pk)
     if version is None:
@@ -507,14 +586,14 @@ def course_delete(request, version_pk, course_pk):
     course = get_object_or_404(Course, pk=course_pk, semester__curriculum_version=version)
     if request.method == 'POST':
         log_action(
-            user=request.user, department=profile.department,
+            user=request.user, department=version.department,
             action=AuditLog.ACTION_DELETE, model_name='Course',
             record_id=course.pk, record_label=str(course),
             old_data={'code': course.code, 'title': course.title},
             curriculum_version=version
         )
         course.delete()
-        messages.success(request, "Course deleted.")
+        messages.success(request, f"Course '{course.code}' deleted.")
     return redirect('curriculum:course_list', version_pk=version_pk)
 
 
@@ -555,7 +634,7 @@ def edit_course_outcomes(request, version_pk, course_pk):
         else:
             co_formset.save()
             log_action(
-                user=request.user, department=profile.department,
+                user=request.user, department=version.department,
                 action=AuditLog.ACTION_UPDATE, model_name='CourseOutcome',
                 record_id=course.pk, record_label=str(course),
                 curriculum_version=version
@@ -579,10 +658,8 @@ def edit_copo_mapping(request, version_pk, course_pk, co_pk):
     mapping, _ = COPOMapping.objects.get_or_create(course_outcome=co)
 
     pos = version.program_outcomes.all()
-    po_count = pos.count()
 
     if request.method == 'POST':
-        # Build mappings from individual PO strength inputs
         mappings = {}
         for po in pos:
             val = request.POST.get(f'po_{po.number}', '').strip()
@@ -598,10 +675,22 @@ def edit_copo_mapping(request, version_pk, course_pk, co_pk):
                 old_data=mapping.mappings,
                 new_data=mappings,
             )
+            log_action(
+                user=request.user, department=version.department,
+                action=AuditLog.ACTION_UPDATE, model_name='ChangeRequest',
+                record_id=mapping.pk, record_label=f"CO{co.number} of {course.code} mapping",
+                new_data=mappings, curriculum_version=version
+            )
             messages.info(request, "CO-PO mapping change submitted for review.")
         else:
             mapping.mappings = mappings
             mapping.save()
+            log_action(
+                user=request.user, department=version.department,
+                action=AuditLog.ACTION_UPDATE, model_name='COPOMapping',
+                record_id=mapping.pk, record_label=f"CO{co.number} of {course.code} mapping",
+                new_data=mappings, curriculum_version=version
+            )
             messages.success(request, "CO-PO mapping saved.")
         return redirect('curriculum:course_detail', version_pk=version_pk, course_pk=course_pk)
 
@@ -638,9 +727,21 @@ def edit_references(request, version_pk, course_pk):
                 old_data={'refs': old_refs},
                 new_data={'refs': new_refs},
             )
+            log_action(
+                user=request.user, department=version.department,
+                action=AuditLog.ACTION_UPDATE, model_name='ChangeRequest',
+                record_id=course.pk, record_label=f"References for {course.code}",
+                curriculum_version=version
+            )
             messages.info(request, "Reference change submitted for review.")
         else:
             ref_formset.save()
+            log_action(
+                user=request.user, department=version.department,
+                action=AuditLog.ACTION_UPDATE, model_name='ReferenceBook',
+                record_id=course.pk, record_label=f"References for {course.code}",
+                curriculum_version=version
+            )
             messages.success(request, "References saved.")
         return redirect('curriculum:course_detail', version_pk=version_pk, course_pk=course_pk)
 
@@ -675,6 +776,11 @@ def edit_peo_ga_mapping(request, version_pk):
             obj, _ = PEOGAMapping.objects.get_or_create(curriculum_version=version, peo=peo)
             obj.mappings = mappings
             obj.save()
+        log_action(
+            user=request.user, department=version.department,
+            action=AuditLog.ACTION_UPDATE, model_name='PEOGAMapping',
+            record_label=f"PEO-GA mappings for {version}", curriculum_version=version
+        )
         messages.success(request, "PEO–GA mappings saved.")
         return redirect('curriculum:version_detail', pk=version_pk)
 
@@ -723,6 +829,11 @@ def edit_po_peo_mapping(request, version_pk):
             obj, _ = POPEOMapping.objects.get_or_create(curriculum_version=version, program_outcome=po)
             obj.mappings = mappings
             obj.save()
+        log_action(
+            user=request.user, department=version.department,
+            action=AuditLog.ACTION_UPDATE, model_name='POPEOMapping',
+            record_label=f"PO-PEO mappings for {version}", curriculum_version=version
+        )
         messages.success(request, "PO–PEO mappings saved.")
         return redirect('curriculum:version_detail', pk=version_pk)
     matrix = {}
@@ -796,35 +907,36 @@ def change_request_review(request, version_pk, cr_pk):
             return redirect('curriculum:change_requests', version_pk=version_pk)
 
         if form.is_valid():
-            cr = form.save(commit=False)
-            cr.reviewed_by = request.user
-            cr.reviewed_at = timezone.now()
+            with transaction.atomic():
+                cr = form.save(commit=False)
+                cr.reviewed_by = request.user
+                cr.reviewed_at = timezone.now()
 
-            if action == 'approve':
-                cr.status = ChangeRequest.STATUS_APPROVED
-                _apply_change_request(cr)
-                log_action(
-                    user=request.user, department=profile.department,
-                    action=AuditLog.ACTION_APPROVE, model_name=cr.model_name,
-                    record_id=cr.record_id,
-                    record_label=f"CR#{cr.pk} by {cr.requested_by.username}",
-                    old_data=cr.old_data, new_data=cr.new_data,
-                    curriculum_version=version
-                )
-                messages.success(request, "Change approved and applied.")
-            else:
-                cr.status = ChangeRequest.STATUS_REJECTED
-                log_action(
-                    user=request.user, department=profile.department,
-                    action=AuditLog.ACTION_REJECT, model_name=cr.model_name,
-                    record_id=cr.record_id,
-                    record_label=f"CR#{cr.pk} by {cr.requested_by.username}",
-                    old_data=cr.old_data, new_data=cr.new_data,
-                    curriculum_version=version
-                )
-                messages.warning(request, "Change rejected.")
+                if action == 'approve':
+                    cr.status = ChangeRequest.STATUS_APPROVED
+                    _apply_change_request(cr)
+                    log_action(
+                        user=request.user, department=version.department,
+                        action=AuditLog.ACTION_APPROVE, model_name=cr.model_name,
+                        record_id=cr.record_id,
+                        record_label=f"CR#{cr.pk} by {cr.requested_by.username}",
+                        old_data=cr.old_data, new_data=cr.new_data,
+                        curriculum_version=version
+                    )
+                    messages.success(request, "Change approved and applied successfully.")
+                else:
+                    cr.status = ChangeRequest.STATUS_REJECTED
+                    log_action(
+                        user=request.user, department=version.department,
+                        action=AuditLog.ACTION_REJECT, model_name=cr.model_name,
+                        record_id=cr.record_id,
+                        record_label=f"CR#{cr.pk} by {cr.requested_by.username}",
+                        old_data=cr.old_data, new_data=cr.new_data,
+                        curriculum_version=version
+                    )
+                    messages.warning(request, "Change request has been rejected.")
 
-            cr.save()
+                cr.save()
             return redirect('curriculum:change_requests', version_pk=version_pk)
 
     return render(request, 'curriculum/change_request_review.html', {
@@ -833,7 +945,8 @@ def change_request_review(request, version_pk, cr_pk):
 
 
 def _apply_change_request(cr):
-    """Apply approved change to actual database records."""
+    """Apply approved change to actual database records within atomic transaction."""
+    logger.info("Applying approved change request #%s for model %s", cr.pk, cr.model_name)
     model_map = {
         'Course': Course,
         'CourseOutcome': CourseOutcome,
@@ -842,12 +955,13 @@ def _apply_change_request(cr):
     }
     model_class = model_map.get(cr.model_name)
     if not model_class:
+        logger.warning("Unmapped model '%s' in change request #%s", cr.model_name, cr.pk)
         return
 
-    if cr.model_name == 'Course' and cr.record_id == 0:
-        # New course creation
-        new_data = cr.new_data
-        try:
+    try:
+        if cr.model_name == 'Course' and cr.record_id == 0:
+            # New course creation
+            new_data = cr.new_data
             semester = Semester.objects.get(pk=int(new_data.get('semester_pk', 0)))
             category_pk = new_data.get('category')
             category = CourseCategory.objects.filter(pk=category_pk).first() if category_pk else None
@@ -867,51 +981,53 @@ def _apply_change_request(cr):
                 prereq = Course.objects.filter(pk=pk).first()
                 if prereq:
                     course.prerequisites.add(prereq)
-        except Exception:
-            pass
-        return
+            cr.record_id = course.pk
+            return
 
-    if cr.model_name == 'COPOMapping':
-        mapping = COPOMapping.objects.filter(pk=cr.record_id).first()
-        if mapping:
-            mapping.mappings = cr.new_data
-            mapping.save()
-        return
+        if cr.model_name == 'COPOMapping':
+            mapping = COPOMapping.objects.filter(pk=cr.record_id).first()
+            if mapping:
+                mapping.mappings = cr.new_data
+                mapping.save()
+            return
 
-    if cr.model_name == 'CourseOutcome':
-        # Replace all outcomes for a course
-        course = Course.objects.filter(pk=cr.record_id).first()
-        if course:
-            course.course_outcomes.all().delete()
-            for co_data in cr.new_data.get('outcomes', []):
-                CourseOutcome.objects.create(
-                    course=course,
-                    number=int(co_data.get('number', 0)),
-                    description=co_data.get('description', ''),
-                )
-        return
+        if cr.model_name == 'CourseOutcome':
+            # Replace all outcomes for a course
+            course = Course.objects.filter(pk=cr.record_id).first()
+            if course:
+                course.course_outcomes.all().delete()
+                for co_data in cr.new_data.get('outcomes', []):
+                    CourseOutcome.objects.create(
+                        course=course,
+                        number=int(co_data.get('number', 0)),
+                        description=co_data.get('description', ''),
+                    )
+            return
 
-    if cr.model_name == 'ReferenceBook':
-        course = Course.objects.filter(pk=cr.record_id).first()
-        if course:
-            course.references.all().delete()
-            for ref_data in cr.new_data.get('refs', []):
-                ReferenceBook.objects.create(
-                    course=course,
-                    number=int(ref_data.get('number', 0)),
-                    citation=ref_data.get('citation', ''),
-                )
-        return
+        if cr.model_name == 'ReferenceBook':
+            course = Course.objects.filter(pk=cr.record_id).first()
+            if course:
+                course.references.all().delete()
+                for ref_data in cr.new_data.get('refs', []):
+                    ReferenceBook.objects.create(
+                        course=course,
+                        number=int(ref_data.get('number', 0)),
+                        citation=ref_data.get('citation', ''),
+                    )
+            return
 
-    # Generic field update for Course
-    try:
+        # Generic field update for Course
         obj = model_class.objects.get(pk=cr.record_id)
         for field, value in cr.new_data.items():
             if hasattr(obj, field):
                 setattr(obj, field, value)
         obj.save()
+
     except model_class.DoesNotExist:
-        pass
+        logger.warning("Target record %s with ID %s not found for change request #%s", model_class, cr.record_id, cr.pk)
+    except Exception as e:
+        logger.exception("Error applying change request #%s: %s", cr.pk, e)
+        raise
 
 
 # ─────────────────────────────────────────────
@@ -922,7 +1038,7 @@ def _apply_change_request(cr):
 def audit_log(request, version_pk):
     profile = get_profile(request)
     if not profile or not (profile.is_hod or profile.is_admin):
-        return HttpResponseForbidden("Only HOD can view audit logs.")
+        return HttpResponseForbidden("Only HOD or Admin can view audit logs.")
     version = get_version_or_403(request, version_pk)
     if version is None:
         return HttpResponseForbidden()
@@ -943,8 +1059,8 @@ def audit_log(request, version_pk):
 @login_required
 def rollback_audit(request, version_pk, log_pk):
     profile = get_profile(request)
-    if not profile or not profile.is_hod:
-        return HttpResponseForbidden("Only HOD can perform rollback.")
+    if not profile or not (profile.is_hod or profile.is_admin):
+        return HttpResponseForbidden("Only HOD or Admin can perform rollback.")
     version = get_version_or_403(request, version_pk)
     if version is None:
         return HttpResponseForbidden()
@@ -960,22 +1076,26 @@ def rollback_audit(request, version_pk, log_pk):
         model_class = model_map.get(log_entry.model_name)
         if model_class and log_entry.record_id:
             try:
-                obj = model_class.objects.get(pk=log_entry.record_id)
-                for field, value in log_entry.old_data.items():
-                    if hasattr(obj, field):
-                        setattr(obj, field, value)
-                obj.save()
-                log_action(
-                    user=request.user, department=profile.department,
-                    action=AuditLog.ACTION_ROLLBACK, model_name=log_entry.model_name,
-                    record_id=log_entry.record_id, record_label=log_entry.record_label,
-                    old_data=log_entry.new_data, new_data=log_entry.old_data,
-                    description=f"Rolled back from audit log #{log_entry.pk}",
-                    curriculum_version=version
-                )
-                messages.success(request, f"Rollback successful for {log_entry.model_name} #{log_entry.record_id}.")
+                with transaction.atomic():
+                    obj = model_class.objects.get(pk=log_entry.record_id)
+                    for field, value in log_entry.old_data.items():
+                        if hasattr(obj, field):
+                            setattr(obj, field, value)
+                    obj.save()
+                    log_action(
+                        user=request.user, department=version.department,
+                        action=AuditLog.ACTION_ROLLBACK, model_name=log_entry.model_name,
+                        record_id=log_entry.record_id, record_label=log_entry.record_label,
+                        old_data=log_entry.new_data, new_data=log_entry.old_data,
+                        description=f"Rolled back from audit log #{log_entry.pk}",
+                        curriculum_version=version
+                    )
+                    messages.success(request, f"Rollback successful for {log_entry.model_name} #{log_entry.record_id}.")
             except model_class.DoesNotExist:
                 messages.error(request, "Record not found for rollback.")
+            except Exception as e:
+                logger.exception("Rollback error on audit log #%s: %s", log_entry.pk, e)
+                messages.error(request, f"Rollback failed: {str(e)}")
         else:
             messages.error(request, "Rollback not supported for this record type.")
 

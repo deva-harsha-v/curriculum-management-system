@@ -1,20 +1,137 @@
 {% extends "base.html" %}
 
+{% block title %}Courses – {{ version.regulation }}{% endblock %}
+{% block page_title %}Courses — {{ version.regulation }} ({{ version.academic_year }}){% endblock %}
+{% block nav_curriculum %}active{% endblock %}
+
 {% block content %}
-<h2>Course List</h2>
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-semibold mb-0">Course Catalog</h5>
+    <div class="text-muted small">
+      {{ version.department.name }} ({{ version.department.code }}) · Regulation {{ version.regulation }}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'curriculum:version_detail' version.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Curriculum
+    </a>
+  </div>
+</div>
 
-{% for semester in semesters %}
-    <h4>{{ semester }}</h4>
-
-    <ul>
-    {% for course in semester.courses.all %}
-        <li>
-            {{ course.code }} - {{ course.title }}
-        </li>
-    {% empty %}
-        <li>No courses</li>
-    {% endfor %}
-    </ul>
-{% endfor %}
-
+<div class="row g-4">
+  {% for sem in semesters %}
+  <div class="col-12">
+    <div class="card table-card shadow-sm">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <span class="badge bg-primary bg-opacity-10 text-primary me-2">Sem {{ sem.semester_number }}</span>
+          <strong>Year {{ sem.year }} – Semester {{ sem.semester }}</strong>
+          <span class="text-muted small ms-2">({{ sem.courses.count }} course{{ sem.courses.count|pluralize }})</span>
+        </div>
+        {% if version.is_editable %}
+        <a href="{% url 'curriculum:course_create' version.pk sem.pk %}" class="btn btn-sm btn-outline-success">
+          <i class="bi bi-plus-lg me-1"></i>Add Course
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if sem.courses.all %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" style="font-size:0.875rem;">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th style="width: 120px;">Code</th>
+                <th>Title</th>
+                <th class="text-center" style="width: 60px;">L</th>
+                <th class="text-center" style="width: 60px;">T</th>
+                <th class="text-center" style="width: 60px;">P</th>
+                <th class="text-center" style="width: 70px;">Credits</th>
+                <th style="width: 140px;">Category</th>
+                <th style="width: 150px;" class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for course in sem.courses.all %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td><code class="fw-semibold">{{ course.code }}</code></td>
+                <td>
+                  <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="fw-semibold text-decoration-none">
+                    {{ course.title }}
+                  </a>
+                  {% if course.is_elective %}
+                    <span class="badge bg-info text-dark ms-1" style="font-size:0.7rem;">Elective</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">{{ course.lectures }}</td>
+                <td class="text-center">{{ course.tutorials }}</td>
+                <td class="text-center">{{ course.practicals }}</td>
+                <td class="text-center fw-bold">{{ course.credits }}</td>
+                <td>
+                  {% if course.category %}
+                    <span class="badge bg-secondary">{{ course.category.code }}</span>
+                    <span class="small text-muted d-block">{{ course.category.name|truncatechars:20 }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm">
+                    <a href="{% url 'curriculum:course_detail' version.pk course.pk %}" class="btn btn-outline-primary" title="View Details">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                    {% if version.is_editable %}
+                    <a href="{% url 'curriculum:course_edit' version.pk course.pk %}" class="btn btn-outline-secondary" title="Edit Course">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if profile.is_hod or profile.is_admin %}
+                    <form method="post" action="{% url 'curriculum:course_delete' version.pk course.pk %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline-danger" title="Delete Course"
+                              data-confirm="Delete course {{ course.code }}? This cannot be undone.">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state py-4">
+          <i class="bi bi-journal-x"></i>
+          <div>No courses defined for Year {{ sem.year }}, Semester {{ sem.semester }}.</div>
+          {% if version.is_editable %}
+          <a href="{% url 'curriculum:course_create' version.pk sem.pk %}" class="btn btn-sm btn-outline-primary mt-2">
+            Add Course
+          </a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="card shadow-sm text-center py-5">
+      <div class="card-body empty-state">
+        <i class="bi bi-calendar-x"></i>
+        <h5>No Semesters Configured</h5>
+        <p class="text-muted small">Please create semesters before adding courses to this curriculum version.</p>
+        {% if version.is_editable %}
+        <a href="{% url 'curriculum:semester_create' version.pk %}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-circle me-1"></i>Add Semester
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
 {% endblock %}

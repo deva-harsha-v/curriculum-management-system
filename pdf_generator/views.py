@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,8 @@ from django.utils import timezone
 from accounts.models import Profile
 from curriculum.models import CurriculumVersion, AuditLog, log_action
 from .generator import generate_curriculum_pdf
+
+logger = logging.getLogger(__name__)
 
 
 def _get_profile(request):
@@ -104,6 +107,7 @@ def pdf_generate(request, version_pk):
             return redirect('pdf_generator:pdf_download', version_pk=version_pk)
 
         except Exception as e:
+            logger.exception("PDF generation failed for version %s", version_pk)
             messages.error(request, f"PDF generation failed: {str(e)}")
             return redirect('curriculum:version_detail', pk=version_pk)
 
@@ -154,6 +158,7 @@ def pdf_download(request, version_pk):
             buf = generate_curriculum_pdf(version)
             pdf_bytes = buf.read()
         except Exception as e:
+            logger.exception("Could not generate PDF on the fly for version %s", version_pk)
             messages.error(request, f"Could not generate PDF: {str(e)}")
             return redirect('curriculum:version_detail', pk=version_pk)
 

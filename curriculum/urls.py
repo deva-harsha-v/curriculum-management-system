@@ -10,6 +10,7 @@ urlpatterns = [
     path('version/<int:pk>/', views.version_detail, name='version_detail'),
     path('version/<int:pk>/edit/', views.version_edit, name='version_edit'),
     path('version/<int:pk>/publish/', views.version_publish, name='version_publish'),
+    path('version/<int:pk>/archive/', views.version_archive, name='version_archive'),
 
     # Graduate Attributes
     path('version/<int:version_pk>/ga/', views.edit_graduate_attributes, name='edit_ga'),

@@ -26,7 +26,7 @@
             <th>Model</th>
             <th>Record</th>
             <th>Description</th>
-            {% if profile.is_hod %}<th>Rollback</th>{% endif %}
+            {% if profile.is_hod or profile.is_admin %}<th>Rollback</th>{% endif %}
           </tr>
         </thead>
         <tbody>
@@ -51,13 +51,13 @@
             <td><code>{{ log.model_name }}</code></td>
             <td class="text-muted small">{{ log.record_label|truncatechars:50 }}</td>
             <td class="text-muted small">{{ log.description|truncatechars:80 }}</td>
-            {% if profile.is_hod %}
+            {% if profile.is_hod or profile.is_admin %}
             <td>
               {% if log.old_data and log.action == 'UPDATE' %}
               <form method="post" action="{% url 'curriculum:rollback_audit' version.pk log.pk %}">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-xs btn-outline-warning btn-sm py-0 px-2"
-                        onclick="return confirm('Roll back this change? The previous state will be restored.')">
+                        data-confirm="Roll back this change? The previous state will be restored.">
                   <i class="bi bi-arrow-counterclockwise me-1"></i>Rollback
                 </button>
               </form>
@@ -72,7 +72,7 @@
           {% if log.old_data or log.new_data %}
           <tr class="table-light" style="font-size:0.78rem;">
             <td></td>
-            <td colspan="{% if profile.is_hod %}5{% else %}4{% endif %}">
+            <td colspan="{% if profile.is_hod or profile.is_admin %}5{% else %}4{% endif %}">
               <div class="d-flex gap-4 py-1">
                 {% if log.old_data %}
                 <div>
@@ -88,13 +88,13 @@
                 {% endif %}
               </div>
             </td>
-            {% if profile.is_hod %}<td></td>{% endif %}
+            {% if profile.is_hod or profile.is_admin %}<td></td>{% endif %}
           </tr>
           {% endif %}
 
           {% empty %}
           <tr>
-            <td colspan="{% if profile.is_hod %}7{% else %}6{% endif %}"
+            <td colspan="{% if profile.is_hod or profile.is_admin %}7{% else %}6{% endif %}"
                 class="text-center text-muted py-5">
               <i class="bi bi-journal-x me-2"></i>No audit log entries yet.
             </td>

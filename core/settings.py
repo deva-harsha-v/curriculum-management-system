@@ -4,11 +4,33 @@ from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-production-use-env-file')
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-DEBUG = config('DEBUG', default=True, cast=bool)
+# In production (DEBUG=False), SECRET_KEY must be supplied via environment variable.
+# A fallback is only permitted in local development (DEBUG=True).
+if DEBUG:
+    SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-only-secret-key-curriculum-management')
+else:
+    SECRET_KEY = config('SECRET_KEY')
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='127.0.0.1,localhost,testserver',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
+)
+
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://127.0.0.1,http://localhost',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
+)
+
+INSTITUTION_NAME = config('INSTITUTION_NAME', default='Curriculum Management System')
+
+# Production Security Flags (configurable via environment)
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -48,6 +70,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.institution_context',
             ],
         },
     },
@@ -93,3 +116,24 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 PDF_OUTPUT_DIR = BASE_DIR / 'media' / 'pdfs'
 PREREQ_CHART_DIR = BASE_DIR / 'media' / 'charts'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}] {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': config('DJANGO_LOG_LEVEL', default='INFO'),
+    },
+}
