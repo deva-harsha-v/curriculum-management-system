@@ -20,8 +20,10 @@
 <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
 <nav id="sidebar">
   <div class="brand">
-    <div class="brand-title">{{ INSTITUTION_NAME|default:"Curriculum Management System" }}</div>
-    <div class="brand-sub">Academic Planning & Outcomes</div>
+    <a href="{% url 'landing' %}" class="text-white text-decoration-none d-block">
+      <div class="brand-title">{{ INSTITUTION_NAME|default:"Curriculum Management System" }}</div>
+      <div class="brand-sub">Academic Planning & Outcomes <i class="bi bi-box-arrow-up-right ms-1" style="font-size: 0.65rem;"></i></div>
+    </a>
   </div>
 
   {% if user.is_authenticated %}
@@ -69,6 +71,9 @@
     <div class="nav-section-label">Account</div>
     <a href="{% url 'accounts:edit_profile' %}" class="nav-link">
       <i class="bi bi-person-circle"></i> My Profile
+    </a>
+    <a href="{% url 'landing' %}" class="nav-link">
+      <i class="bi bi-globe"></i> Public Portal
     </a>
     <form method="post" action="{% url 'accounts:logout' %}" class="w-100 m-0 p-0">
       {% csrf_token %}
@@ -133,9 +138,9 @@
 </div>
 
 <!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- Custom Application Script -->
-<script src="{% static 'js/app.js' %}"></script>
+  <script src="{% static 'js/app.js' %}"></script>
 
 {% block extra_js %}{% endblock %}
 </body>

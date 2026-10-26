@@ -2,17 +2,18 @@
 
 A production-ready, secure, role-based Curriculum Management System built using **Python 3.11** and **Django 4.2 LTS (Django==4.2.13)** to streamline academic curriculum planning, syllabus tracking, outcome-based education (OBE) mapping, and automated institutional PDF generation for engineering colleges and universities.
 
-The system enforces strict multi-role governance (Administrator, Head of Department, and Faculty) with isolated departmental boundaries, a formal change-request approval workflow, immutable published curricula, and automated ReportLab PDF compilation with Graphviz prerequisite dependency visualization.
+The system enforces strict multi-role governance (Administrator, Head of Department, and Faculty) with isolated departmental boundaries, a formal change-request approval workflow, immutable published curricula, a public institutional landing page, and automated ReportLab PDF compilation with Graphviz prerequisite dependency visualization.
 
 ---
 
 ## 📋 Table of Contents
 - [Architecture & Design](#-architecture--design)
+- [Conceptual Routing Flow](#-conceptual-routing-flow)
 - [Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
 - [Key Features](#-key-features)
 - [Outcome-Based Education (OBE) Matrix](#-outcome-based-education-obe-matrix)
 - [Prerequisite Dependency Graph & Fallback](#-prerequisite-dependency-graph--fallback)
-- [Automated Testing Suite (31 Tests)](#-automated-testing-suite-31-tests)
+- [Automated Testing Suite (37 Tests)](#-automated-testing-suite-37-tests)
 - [Local Development Setup](#-local-development-setup)
 - [Environment Configuration](#-environment-configuration)
 - [Production Deployment on PythonAnywhere](#-production-deployment-on-pythonanywhere)
@@ -31,7 +32,7 @@ curriculum-management-system-main/
 │   ├── models.py              # UserProfile with Role (ADMIN, HOD, FACULTY), Department FK
 │   ├── views.py               # Login, POST-only Logout, Admin Dashboard, User Activation
 │   ├── forms.py               # Custom User & Profile creation forms
-│   └── tests.py               # 8 Automated RBAC & authentication tests
+│   └── tests.py               # 14 Automated RBAC, auth, landing & routing tests
 ├── curriculum/                # Core curriculum data, OBE mappings, workflow engine
 │   ├── models.py              # Department, CurriculumVersion, Course, PEO, PO, CO, AuditLog
 │   ├── views.py               # Versions, Courses, Matrices, Change Requests, Approvals
@@ -47,12 +48,14 @@ curriculum-management-system-main/
 ├── core/                      # Project root configuration
 │   ├── settings.py            # Security-hardened settings with decouple & WhiteNoise
 │   ├── urls.py                # Top-level URL routing
+│   ├── views.py               # Public landing page view
 │   ├── wsgi.py                # WSGI application entrypoint
 │   └── context_processors.py  # Global context (e.g. INSTITUTION_NAME)
 ├── static/                    # Centralized CSS and JS assets
 │   ├── css/app.css            # Responsive layout, audit highlights, diff styling
 │   └── js/app.js              # Matrix validation, toasts, CSRF helpers, confirm modals
 ├── templates/                 # Server-side Bootstrap 5.3.3 templates
+│   ├── landing.html           # Public, non-login institutional landing page
 │   ├── base.html              # Responsive layout with role-aware navigation
 │   ├── accounts/              # Authentication & user administration templates
 │   ├── curriculum/            # Versioning, courses, matrices, change review screens
@@ -62,6 +65,40 @@ curriculum-management-system-main/
 ├── .env.example               # Environment variable specification
 └── manage.py
 ```
+
+---
+
+## 🌐 Conceptual Routing Flow
+
+The routing architecture separates public information from protected administrative workflows:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                       VISITOR REQUEST                       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                ▼                             ▼
+         GET / (Root URL)            GET /accounts/dashboard/
+                │                             │
+                ▼                             ▼
+       [ Public Landing Page ]       [ @login_required ]
+       • No login required           • Unauthenticated? ➔ Redirect to Login
+       • Institution branding        • Authenticated? ➔ Role Dashboard
+       • Key capabilities                     │
+       • Direct "Sign In" button              ├─ ADMIN   ➔ /accounts/admin-dashboard/
+                │                             ├─ HOD     ➔ /accounts/hod-dashboard/
+                ▼                             └─ FACULTY ➔ /accounts/faculty-dashboard/
+        GET /accounts/login/
+       [ Authentication Screen ]
+       • Secure credential entry
+       • Back-to-Home navigation
+```
+
+- `/`: Fully public, non-login landing page accessible without credentials.
+- `/accounts/login/`: Standalone authentication portal with password toggle and return navigation.
+- `/accounts/dashboard/`: Protected dispatcher directing users to their role-specific dashboard.
+- All curriculum, admin, and PDF management endpoints enforce strict authentication and authorization decorators.
 
 ---
 
@@ -90,6 +127,7 @@ The system implements strict horizontal and vertical access boundaries:
 
 ## ✨ Key Features
 
+- **Public Institutional Landing Page**: Fully responsive homepage at `/` showcasing academic capabilities, governance roles, and accreditation alignment without forcing unauthenticated visitors into the login redirect loop.
 - **Automated Audit Logging**: Every critical lifecycle and curriculum event is captured with timestamp, user, action code, and detailed description.
 - **CSRF-Protected Actions**: State-changing endpoints (including User Logout) enforce `POST` with CSRF validation.
 - **Dynamic Matrix Mappings**:
@@ -97,7 +135,7 @@ The system implements strict horizontal and vertical access boundaries:
   - Department Mission to Program Educational Objectives (PEO) mapping.
   - Program Educational Objectives (PEO) to Graduate Attributes (GA) mapping.
 - **Security Hardening**:
-  - `DEBUG=False` by default in production.
+  - `DEBUG=False` by default in production; no hardcoded secret key fallbacks.
   - Configurable `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, and cookie security flags via `.env`.
   - WhiteNoise integration for high-performance static asset delivery with cache busting.
   - Institutional branding dynamically injected across all templates via context processors.
@@ -123,9 +161,9 @@ The PDF generator (`pdf_generator/prereq_chart.py`) constructs a directed acycli
 
 ---
 
-## 🧪 Automated Testing Suite (31 Tests)
+## 🧪 Automated Testing Suite (37 Tests)
 
-The project includes an automated test suite with **31 unit, security, RBAC, and integration tests** across all apps.
+The project includes an automated test suite with **37 unit, security, RBAC, routing, and integration tests** across all apps.
 
 ```bash
 # Run the complete test suite
@@ -138,7 +176,13 @@ python manage.py test pdf_generator
 ```
 
 ### Test Coverage Breakdown:
-- **`accounts` (8 tests)**:
+- **`accounts` (14 tests)**:
+  - Public root URL (`/`) accessibility without authentication (HTTP 200)
+  - Public root URL rendering with `DEBUG=False` production simulation
+  - Authenticated user visiting root URL with dashboard access
+  - Unauthenticated access to `/accounts/dashboard/` safely redirecting to login
+  - Unauthenticated access to protected curriculum endpoints redirecting to login
+  - Login page rendering with Back-to-Home navigation
   - Valid user login and session creation
   - Rejection of invalid credentials
   - Inactive user login denial
@@ -235,7 +279,7 @@ python manage.py createsuperuser
 # Start development server
 python manage.py runserver
 ```
-Visit `http://127.0.0.1:8000/` in your browser.
+Visit `http://127.0.0.1:8000/` in your browser to view the public landing page!
 
 ---
 
@@ -244,7 +288,7 @@ Visit `http://127.0.0.1:8000/` in your browser.
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
 | `DEBUG` | Enable debug mode (Must be `False` in production) | `False` |
-| `SECRET_KEY` | Cryptographic secret for signing sessions & tokens | 50+ character random string |
+| `SECRET_KEY` | Cryptographic secret for signing sessions & tokens | 50+ character random string (required in production) |
 | `ALLOWED_HOSTS` | Comma-separated allowed hostnames | `127.0.0.1,localhost,yourname.pythonanywhere.com` |
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted origin URLs | `https://yourname.pythonanywhere.com` |
 | `INSTITUTION_NAME` | Global institution name displayed on navbar & PDF | `Curriculum Management System` |
@@ -346,6 +390,7 @@ This project has been verified against all evaluation criteria:
 
 | Requirement | Implementation & Location | Status |
 | :--- | :--- | :---: |
+| **Public Landing Page** | Fully public homepage at `/` with institutional branding and direct login navigation (`core/views.py`, `templates/landing.html`) | ✅ Compliant |
 | **Role-Based Access Control** | Admin, HOD, and Faculty roles with profile assignment (`accounts/models.py`, `accounts/views.py`) | ✅ Compliant |
 | **Department Isolation** | `@dept_required` decorator, `get_version_or_403` preventing cross-department access (`curriculum/views.py`) | ✅ Compliant |
 | **Curriculum Lifecycle** | DRAFT, PUBLISHED, ARCHIVED states with published immutability protection (`curriculum/models.py`) | ✅ Compliant |
@@ -356,7 +401,7 @@ This project has been verified against all evaluation criteria:
 | **Prerequisite DAG / Fallback** | Graphviz dependency graph with automatic table fallback for zero-dependency hosting (`pdf_generator/`) | ✅ Compliant |
 | **Security Standards** | CSRF tokens on all POST forms, POST-only logout, password toggles, no hardcoded secrets (`core/settings.py`) | ✅ Compliant |
 | **Static & Styling** | Centralized `static/css/app.css` and `static/js/app.js`, WhiteNoise static post-processing | ✅ Compliant |
-| **Automated Testing** | 31 comprehensive unit, integration, and security tests passing with zero failures (`manage.py test`) | ✅ Compliant |
+| **Automated Testing** | 37 comprehensive unit, integration, routing, and security tests passing with zero failures (`manage.py test`) | ✅ Compliant |
 | **Production Ready** | `check --deploy` verified, `.env.example`, PythonAnywhere WSGI template and deployment guide | ✅ Compliant |
 
 ---

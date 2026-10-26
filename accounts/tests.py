@@ -1,4 +1,4 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.contrib.auth.models import User
 from accounts.models import Department, Profile
@@ -147,3 +147,55 @@ class RBACTests(TestCase):
         self.client.post(reverse('accounts:remove_faculty', args=[self.faculty_ece.id]))
         self.faculty_ece.refresh_from_db()
         self.assertTrue(self.faculty_ece.is_active)  # Remains active
+
+
+class PublicLandingAndRoutingTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.dept = Department.objects.create(name='Computer Science', code='CSE')
+        self.hod_user = User.objects.create_user(username='hod_test', password='password123')
+        Profile.objects.create(user=self.hod_user, role=Profile.ROLE_HOD, department=self.dept)
+
+    def test_root_url_is_public_landing_page(self):
+        """Root URL (/) must be public, returning 200 OK without redirecting to login."""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'landing.html')
+        self.assertContains(response, 'Curriculum Management System')
+        self.assertContains(response, reverse('accounts:login'))
+
+    def test_authenticated_user_can_view_landing_page(self):
+        """Logged-in user visiting root URL sees landing page with dashboard CTA."""
+        self.client.login(username='hod_test', password='password123')
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'landing.html')
+        self.assertContains(response, reverse('accounts:dashboard'))
+
+    def test_unauthenticated_dashboard_redirects_to_login(self):
+        """Protected dashboard route must redirect unauthenticated visitors to login."""
+        response = self.client.get(reverse('accounts:dashboard'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('accounts:login'), response.url)
+
+    def test_unauthenticated_curriculum_redirects_to_login(self):
+        """Protected curriculum route must redirect unauthenticated visitors to login."""
+        response = self.client.get(reverse('curriculum:version_list'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('accounts:login'), response.url)
+
+    def test_login_page_renders_cleanly_with_back_to_home(self):
+        """Login page must remain accessible with a link back to the public landing page."""
+        response = self.client.get(reverse('accounts:login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'accounts/login.html')
+        self.assertContains(response, reverse('landing'))
+
+    @override_settings(DEBUG=False)
+    def test_root_url_renders_with_debug_false(self):
+        """Landing page must render cleanly (200 OK) even in production with DEBUG=False."""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'landing.html')
+        self.assertContains(response, 'Curriculum Management System')
+        self.assertContains(response, reverse('accounts:login'))
