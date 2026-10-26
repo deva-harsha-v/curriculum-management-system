@@ -18,10 +18,16 @@ from .forms import (
 # ─────────────────────────────────────────────
 
 def get_profile_or_403(request):
-    """Return profile or raise 403 if no profile found."""
+    """Return profile or raise 403 if no profile found. Auto-creates ADMIN profile for superusers."""
     try:
         return request.user.profile
     except Profile.DoesNotExist:
+        if getattr(request.user, 'is_superuser', False):
+            profile, _ = Profile.objects.get_or_create(
+                user=request.user,
+                defaults={'role': Profile.ROLE_ADMIN}
+            )
+            return profile
         return None
 
 
